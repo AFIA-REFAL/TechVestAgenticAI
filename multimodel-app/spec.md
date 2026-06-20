@@ -13,7 +13,6 @@ with its speed and cost, so I can compare models for a real task.
 ## Models (OpenRouter IDs)
 - deepseek/deepseek-r1:free
 - qwen/qwen3-32b:free
-- meta-llama/llama-3.3-70b-instruct:free
 - google/gemma-3-27b-it:free
  
 ## Pipeline
