@@ -11,8 +11,10 @@ with its speed and cost, so I can compare models for a real task.
 - answer text   - latency (seconds)   - tokens (in/out)   - cost (USD)
  
 ## Models (OpenRouter IDs)
-- openai/gpt-5.5            - anthropic/claude-opus-4.8
-- google/gemini-3.1-pro     - qwen/qwen-3.7
+- deepseek/deepseek-r1:free
+- qwen/qwen3-32b:free
+- meta-llama/llama-3.3-70b-instruct:free
+- google/gemma-3-27b-it:free
  
 ## Pipeline
 1. Load OPENROUTER_API_KEY from .env.
