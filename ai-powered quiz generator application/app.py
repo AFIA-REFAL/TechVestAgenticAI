@@ -14,444 +14,339 @@ DIFF_HINTS = {
     "Complex": "Analytical edge-cases, trade-offs & best-among-goods challenges.",
 }
 DIFF_PROMPTS = {
-    "Simple":  "Generate straightforward factual recall questions. Focus on definitions, key terms, and basic concepts directly stated in the slides.",
-    "Medium":  "Generate balanced questions mixing factual recall and scenario-based reasoning. Include some best answer questions that require understanding relationships between concepts.",
-    "Complex": "Generate challenging analytical questions requiring deep understanding. Focus on edge cases, subtle distinctions, trade-offs, and application of concepts in novel scenarios. Make distractors highly plausible.",
+    "Simple":  "Generate straightforward factual recall questions focusing on definitions, key terms, and basic concepts directly stated in the slides.",
+    "Medium":  "Generate balanced questions mixing factual recall and scenario-based reasoning. Include best-answer questions requiring understanding of relationships between concepts.",
+    "Complex": "Generate challenging analytical questions requiring deep understanding. Focus on edge cases, subtle distinctions, trade-offs, and novel application of concepts.",
 }
 
 st.set_page_config(page_title="AI Quiz Generator", page_icon="🎯", layout="centered")
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body { font-family: 'Inter', sans-serif; }
-
-/* ── ANIMATED BACKGROUND ── */
-[data-testid="stAppViewContainer"] {
-    background: #060818;
+html, body, [data-testid="stAppViewContainer"] {
     font-family: 'Inter', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
+    background: #f0f4f8;
 }
-[data-testid="stAppViewContainer"]::before {
-    content: '';
-    position: fixed;
-    top: -40%;
-    left: -20%;
-    width: 600px;
-    height: 600px;
-    background: radial-gradient(circle, rgba(139,92,246,0.25) 0%, transparent 70%);
-    border-radius: 50%;
-    animation: orb1 8s ease-in-out infinite alternate;
-    pointer-events: none;
-    z-index: 0;
-}
-[data-testid="stAppViewContainer"]::after {
-    content: '';
-    position: fixed;
-    bottom: -30%;
-    right: -15%;
-    width: 500px;
-    height: 500px;
-    background: radial-gradient(circle, rgba(6,182,212,0.18) 0%, transparent 70%);
-    border-radius: 50%;
-    animation: orb2 10s ease-in-out infinite alternate;
-    pointer-events: none;
-    z-index: 0;
-}
-@keyframes orb1 { from { transform: translate(0,0) scale(1); } to { transform: translate(60px,80px) scale(1.15); } }
-@keyframes orb2 { from { transform: translate(0,0) scale(1); } to { transform: translate(-50px,-60px) scale(1.2); } }
 
-/* Extra orb via a div we inject */
-.orb3 {
-    position: fixed;
-    top: 40%;
-    left: 50%;
-    transform: translate(-50%,-50%);
-    width: 800px;
-    height: 400px;
-    background: radial-gradient(ellipse, rgba(99,102,241,0.08) 0%, transparent 70%);
-    border-radius: 50%;
-    animation: orb3 12s ease-in-out infinite alternate;
-    pointer-events: none;
-    z-index: 0;
-}
-@keyframes orb3 { from { opacity:.4; } to { opacity:1; } }
-
-[data-testid="stHeader"] { background: transparent !important; display:none; }
-#MainMenu, footer, header { visibility: hidden; }
+[data-testid="stHeader"] { display: none !important; }
+#MainMenu, footer { visibility: hidden; }
 section[data-testid="stSidebar"] { display: none; }
-
 [data-testid="stMain"] > div { padding-top: 0 !important; }
-[data-testid="block-container"] { padding-top: 0 !important; position: relative; z-index: 1; }
+[data-testid="block-container"] { padding: 0 1rem 3rem !important; max-width: 780px !important; }
 
-/* ── NAVBAR ── */
-.navbar {
-    background: rgba(255,255,255,0.03);
-    backdrop-filter: blur(30px);
-    -webkit-backdrop-filter: blur(30px);
-    border-bottom: 1px solid rgba(255,255,255,0.07);
-    padding: 16px 32px;
+/* ── TOPBAR ── */
+.topbar {
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0 32px;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 40px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    margin-bottom: 36px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    position: sticky; top: 0; z-index: 99;
 }
-.nb-brand {
-    display: flex; align-items: center; gap: 12px;
-    font-size: 17px; font-weight: 800; color: #fff;
-    letter-spacing: -0.4px;
+.topbar-brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 16px; font-weight: 800; color: #0f172a;
 }
-.nb-logo {
-    width: 38px; height: 38px; border-radius: 12px;
-    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+.topbar-logo {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, #2563eb, #0ea5e9);
     display: flex; align-items: center; justify-content: center;
-    font-size: 20px;
-    box-shadow: 0 0 20px rgba(139,92,246,0.6), 0 0 40px rgba(139,92,246,0.2);
+    font-size: 17px;
+    box-shadow: 0 2px 8px rgba(37,99,235,0.35);
 }
-.nb-step {
-    font-size: 12px; font-weight: 600; letter-spacing: .06em;
-    color: rgba(255,255,255,0.5);
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.1);
-    padding: 6px 16px; border-radius: 30px;
+.topbar-badge {
+    background: #eff6ff; color: #2563eb;
+    border: 1px solid #bfdbfe;
+    font-size: 11px; font-weight: 700;
+    padding: 4px 12px; border-radius: 20px;
+    letter-spacing: .04em;
 }
 
-/* ── SECTION HEADER ── */
-.sec-header { text-align: center; margin-bottom: 32px; }
-.sec-tag {
-    display: inline-block;
-    font-size: 10px; font-weight: 700; letter-spacing: .15em;
-    color: #8b5cf6; text-transform: uppercase;
-    background: rgba(139,92,246,0.12);
-    border: 1px solid rgba(139,92,246,0.25);
-    padding: 4px 14px; border-radius: 20px;
-    margin-bottom: 14px;
+/* ── STEP INDICATOR ── */
+.steps-row {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0; margin-bottom: 32px;
 }
-.sec-title {
-    font-size: 30px; font-weight: 900; color: #fff;
-    letter-spacing: -0.6px; line-height: 1.15;
-    margin-bottom: 8px;
+.step-item { display: flex; align-items: center; gap: 0; }
+.step-circle {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    border: 2px solid #e2e8f0;
+    background: #fff; color: #94a3b8;
+    position: relative; z-index: 1;
 }
-.sec-title span {
-    background: linear-gradient(135deg, #a78bfa, #06b6d4);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+.step-circle.done  { background: #2563eb; border-color: #2563eb; color: #fff; }
+.step-circle.active{ background: #fff; border-color: #2563eb; color: #2563eb; box-shadow: 0 0 0 4px #dbeafe; }
+.step-label {
+    font-size: 11px; font-weight: 600; color: #94a3b8;
+    margin-left: 8px; white-space: nowrap;
 }
-.sec-sub { font-size: 14px; color: rgba(255,255,255,0.4); }
+.step-label.active-lbl { color: #2563eb; }
+.step-line { width: 60px; height: 2px; background: #e2e8f0; margin: 0 4px; }
+.step-line.done-line { background: #2563eb; }
 
-/* ── GLASS CARD ── */
-.gcard {
-    background: rgba(255,255,255,0.04);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 20px;
+/* ── PAGE HEADING ── */
+.pg-heading { text-align: center; margin-bottom: 28px; }
+.pg-heading h1 { font-size: 26px; font-weight: 800; color: #0f172a; margin-bottom: 6px; letter-spacing: -.4px; }
+.pg-heading p  { font-size: 14px; color: #64748b; }
+
+/* ── WHITE CARD ── */
+.wcard {
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
     padding: 28px;
     margin-bottom: 16px;
-    position: relative;
-    overflow: hidden;
-}
-.gcard::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(139,92,246,0.6), rgba(6,182,212,0.4), transparent);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05), 0 4px 16px rgba(0,0,0,0.04);
 }
 
 /* ── UPLOAD ── */
-.upload-area {
-    border: 2px dashed rgba(139,92,246,0.4);
-    border-radius: 16px;
-    padding: 56px 24px;
+.upload-zone {
+    border: 2px dashed #93c5fd;
+    border-radius: 14px; padding: 52px 24px;
     text-align: center;
-    background: rgba(139,92,246,0.04);
+    background: #f8faff;
     margin-bottom: 16px;
-    transition: all .3s;
-    position: relative;
-    overflow: hidden;
+    transition: all .2s;
 }
-.upload-area::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at 50% 0%, rgba(139,92,246,0.1), transparent 60%);
-    pointer-events: none;
-}
-.upload-icon { font-size: 52px; margin-bottom: 14px; display: block; filter: drop-shadow(0 0 20px rgba(139,92,246,0.8)); }
-.upload-area h2 { font-size: 20px; font-weight: 800; color: #fff; margin-bottom: 6px; }
-.upload-area p  { font-size: 13px; color: rgba(255,255,255,0.35); }
+.upload-zone:hover { border-color: #2563eb; background: #eff6ff; }
+.upload-zone .uz-icon { font-size: 48px; margin-bottom: 14px; display: block; }
+.upload-zone h3 { font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 6px; }
+.upload-zone p  { font-size: 13px; color: #94a3b8; }
 
-.parsed-card {
-    background: rgba(16,185,129,0.07);
-    border: 1px solid rgba(16,185,129,0.25);
-    border-radius: 14px; padding: 16px 20px;
+.parsed-row {
+    background: #f0fdf4; border: 1px solid #bbf7d0;
+    border-radius: 12px; padding: 14px 18px;
     display: flex; align-items: center; gap: 14px;
     margin: 14px 0;
-    box-shadow: 0 0 20px rgba(16,185,129,0.08);
 }
-.parsed-card .pi { font-size: 26px; filter: drop-shadow(0 0 8px rgba(16,185,129,0.6)); }
-.parsed-card .pt { flex: 1; }
-.parsed-card .pt strong { color: #fff; font-size: 14px; display: block; margin-bottom: 2px; }
-.parsed-card .pt span  { color: rgba(255,255,255,0.45); font-size: 12px; }
-.parsed-badge {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: #fff; font-size: 11px; font-weight: 700;
-    padding: 5px 14px; border-radius: 20px;
-    box-shadow: 0 0 14px rgba(16,185,129,0.4);
+.parsed-row .pr-icon { font-size: 22px; }
+.parsed-row .pr-info { flex: 1; }
+.parsed-row .pr-info strong { font-size: 14px; color: #0f172a; display: block; margin-bottom: 2px; }
+.parsed-row .pr-info span  { font-size: 12px; color: #64748b; }
+.badge-ok {
+    background: #16a34a; color: #fff;
+    font-size: 11px; font-weight: 700;
+    padding: 4px 12px; border-radius: 20px;
 }
 
-/* ── SOURCE PILL ── */
-.src-pill {
-    display: flex; align-items: center; gap: 10px;
-    background: rgba(139,92,246,0.08);
-    border: 1px solid rgba(139,92,246,0.22);
-    border-radius: 12px; padding: 12px 18px;
-    font-size: 13px; color: #c4b5fd;
-    margin-bottom: 28px;
+/* ── SOURCE STRIP ── */
+.src-strip {
+    background: #f8fafc; border: 1px solid #e2e8f0;
+    border-radius: 10px; padding: 11px 16px;
+    font-size: 13px; color: #64748b; margin-bottom: 24px;
+    display: flex; align-items: center; gap: 8px;
 }
-.sec-lbl {
-    font-size: 10px; font-weight: 700; letter-spacing: .12em;
-    color: rgba(255,255,255,0.3); text-transform: uppercase;
-    margin-bottom: 12px; display: block;
-}
+.src-strip strong { color: #0f172a; }
 
-/* ── DIFFICULTY CARDS ── */
-.diff-grid { display: flex; gap: 12px; margin-bottom: 12px; }
-.diff-tile {
-    flex: 1; padding: 18px 12px; border-radius: 14px;
-    border: 1.5px solid rgba(255,255,255,0.08);
-    background: rgba(255,255,255,0.03);
-    text-align: center; cursor: pointer;
-    transition: all .25s;
-    position: relative; overflow: hidden;
-}
-.diff-tile.on {
-    border-color: #8b5cf6;
-    background: rgba(139,92,246,0.12);
-    box-shadow: 0 0 24px rgba(139,92,246,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
-}
-.diff-tile.on::before {
-    content: '';
-    position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, #8b5cf6, #06b6d4);
-}
-.diff-tile .de { font-size: 26px; margin-bottom: 8px; display: block; }
-.diff-tile .dn { font-size: 13px; font-weight: 700; color: #fff; }
-.diff-tile.on .dn { color: #c4b5fd; }
+/* ── SECTION LABEL ── */
+.slbl { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #94a3b8; text-transform: uppercase; margin-bottom: 10px; display: block; }
 
-.hint-box {
-    background: rgba(6,182,212,0.06);
-    border: 1px solid rgba(6,182,212,0.18);
-    border-radius: 12px; padding: 12px 16px;
-    font-size: 12px; color: #67e8f9;
-    margin-bottom: 24px;
-    display: flex; align-items: flex-start; gap: 8px;
+/* ── DIFFICULTY ── */
+.diff-row { display: flex; gap: 10px; margin-bottom: 12px; }
+.diff-box {
+    flex: 1; padding: 14px 10px; border-radius: 12px;
+    border: 1.5px solid #e2e8f0; background: #f8fafc;
+    text-align: center; cursor: pointer; transition: all .2s;
 }
+.diff-box:hover { border-color: #93c5fd; }
+.diff-box.sel { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 3px #dbeafe; }
+.diff-box .db-emoji { font-size: 22px; margin-bottom: 5px; display: block; }
+.diff-box .db-name  { font-size: 13px; font-weight: 700; color: #0f172a; }
+.diff-box.sel .db-name { color: #2563eb; }
 
-/* ── QUIZ ── */
-.q-meta {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 10px;
-}
-.q-num {
-    font-size: 11px; font-weight: 700; letter-spacing: .1em;
-    color: #8b5cf6;
-}
-.timer {
-    background: rgba(251,146,60,0.1);
-    border: 1px solid rgba(251,146,60,0.25);
-    color: #fb923c; font-size: 13px; font-weight: 700;
-    padding: 5px 14px; border-radius: 20px;
-    display: inline-flex; align-items: center; gap: 6px;
-    box-shadow: 0 0 12px rgba(251,146,60,0.1);
-}
-
-.pbar-wrap {
-    height: 6px; border-radius: 6px;
-    background: rgba(255,255,255,0.07);
-    margin-bottom: 28px; overflow: hidden;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
-}
-.pbar-fill {
-    height: 100%; border-radius: 6px;
-    background: linear-gradient(90deg, #8b5cf6, #06b6d4);
-    box-shadow: 0 0 10px rgba(139,92,246,0.6);
-    transition: width .5s ease;
-}
-
-.q-text {
-    font-size: 19px; font-weight: 700; color: #fff;
-    line-height: 1.55; margin-bottom: 24px;
-    letter-spacing: -0.2px;
-}
-
-/* ── SCORE SCREEN ── */
-.score-hero {
-    text-align: center; padding: 40px 28px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 24px; margin-bottom: 24px;
-    position: relative; overflow: hidden;
-}
-.score-hero::before {
-    content: '';
-    position: absolute; inset: 0;
-    background: radial-gradient(circle at 50% 0%, rgba(139,92,246,0.15), transparent 60%);
-    pointer-events: none;
-}
-.score-hero::after {
-    content: '';
-    position: absolute; top:0; left:0; right:0; height:2px;
-    background: linear-gradient(90deg, transparent, #8b5cf6, #06b6d4, transparent);
-}
-.score-big {
-    font-size: 80px; font-weight: 900; line-height: 1;
-    background: linear-gradient(135deg, #a78bfa, #06b6d4);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 30px rgba(139,92,246,0.5));
-    margin-bottom: 4px;
-}
-.score-pct { font-size: 24px; font-weight: 700; color: rgba(255,255,255,0.7); margin-bottom: 8px; }
-.score-hl  { font-size: 15px; color: rgba(255,255,255,0.45); margin-bottom: 20px; }
-.chips { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-.chip {
-    padding: 7px 18px; border-radius: 30px;
-    font-size: 13px; font-weight: 600;
-}
-.chip-g { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); color: #34d399; box-shadow: 0 0 12px rgba(16,185,129,0.1); }
-.chip-r { background: rgba(239,68,68,0.1);   border: 1px solid rgba(239,68,68,0.25);  color: #f87171; box-shadow: 0 0 12px rgba(239,68,68,0.08); }
-.chip-o { background: rgba(251,146,60,0.1);  border: 1px solid rgba(251,146,60,0.25); color: #fb923c; }
-
-.rev-lbl {
-    font-size: 10px; font-weight: 700; letter-spacing: .12em;
-    color: rgba(255,255,255,0.28); text-transform: uppercase;
-    margin: 22px 0 12px;
-}
-.rev-item { border-radius: 14px; padding: 15px 18px; margin-bottom: 10px; }
-.rev-ok  { background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.18); }
-.rev-bad { background: rgba(239,68,68,0.06);  border: 1px solid rgba(239,68,68,0.18);  }
-.rev-hd  { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 5px; }
-.rev-ic  { font-size: 15px; flex-shrink:0; margin-top:2px; }
-.rev-tl  { font-size: 13px; font-weight: 700; color: #fff; }
-.rev-q   { font-size: 12px; color: rgba(255,255,255,0.45); margin: 4px 0 4px 25px; }
-.ans-ok  { font-size: 12px; color: #34d399; margin-left: 25px; }
-.ans-bad { font-size: 12px; color: #f87171; margin-left: 25px; }
-.ai-row  {
-    background: rgba(139,92,246,0.07);
-    border: 1px solid rgba(139,92,246,0.18);
+.hint-strip {
+    background: #f0f9ff; border: 1px solid #bae6fd;
     border-radius: 10px; padding: 10px 14px;
-    font-size: 12px; color: #c4b5fd;
-    margin: 8px 0 0 0;
-    display: flex; gap: 8px;
-    box-shadow: 0 0 12px rgba(139,92,246,0.06);
+    font-size: 12px; color: #0369a1;
+    margin-bottom: 24px; display: flex; gap: 8px;
 }
 
-/* ── STREAMLIT WIDGET OVERRIDES ── */
+/* ── QUIZ — ALL QUESTIONS PAGE ── */
+.quiz-topbar {
+    background: #fff; border: 1px solid #e2e8f0;
+    border-radius: 14px; padding: 16px 22px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.qt-left { display: flex; flex-direction: column; gap: 2px; }
+.qt-title { font-size: 15px; font-weight: 800; color: #0f172a; }
+.qt-sub   { font-size: 12px; color: #64748b; }
+.qt-right { display: flex; align-items: center; gap: 12px; }
+.timer-box {
+    background: #fff7ed; border: 1px solid #fed7aa;
+    color: #c2410c; font-size: 14px; font-weight: 700;
+    padding: 7px 14px; border-radius: 10px;
+    display: flex; align-items: center; gap: 6px;
+}
+.answered-pill {
+    background: #eff6ff; color: #2563eb;
+    border: 1px solid #bfdbfe;
+    font-size: 12px; font-weight: 600;
+    padding: 6px 14px; border-radius: 10px;
+}
+
+.pbar-outer { background: #e2e8f0; border-radius: 6px; height: 6px; margin-bottom: 20px; overflow: hidden; }
+.pbar-inner { height: 100%; background: linear-gradient(90deg,#2563eb,#0ea5e9); border-radius: 6px; transition: width .5s; }
+
+/* ── QUESTION CARD ── */
+.q-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 24px 26px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    transition: box-shadow .2s;
+}
+.q-card:hover { box-shadow: 0 4px 16px rgba(37,99,235,0.08); }
+.q-num-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #eff6ff; color: #2563eb;
+    font-size: 11px; font-weight: 700; letter-spacing: .06em;
+    padding: 4px 10px; border-radius: 6px;
+    margin-bottom: 12px;
+}
+.q-topic-tag {
+    display: inline-flex;
+    background: #f1f5f9; color: #475569;
+    font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: 6px;
+    margin-bottom: 12px; margin-left: 6px;
+}
+.q-text { font-size: 15px; font-weight: 600; color: #0f172a; line-height: 1.55; margin-bottom: 16px; }
+
+/* ── RESULTS ── */
+.score-banner {
+    background: linear-gradient(135deg, #1e40af, #0284c7);
+    border-radius: 18px; padding: 36px 32px;
+    text-align: center; margin-bottom: 24px;
+    box-shadow: 0 8px 32px rgba(37,99,235,0.25);
+    position: relative; overflow: hidden;
+}
+.score-banner::before {
+    content: '';
+    position: absolute; top: -60px; right: -60px;
+    width: 200px; height: 200px;
+    background: rgba(255,255,255,0.06); border-radius: 50%;
+}
+.score-banner::after {
+    content: '';
+    position: absolute; bottom: -80px; left: -40px;
+    width: 240px; height: 240px;
+    background: rgba(255,255,255,0.04); border-radius: 50%;
+}
+.score-num { font-size: 72px; font-weight: 900; color: #fff; line-height: 1; margin-bottom: 4px; }
+.score-pct { font-size: 20px; color: rgba(255,255,255,.75); font-weight: 600; margin-bottom: 8px; }
+.score-hl  { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 20px; }
+.score-chips { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; position: relative; z-index:1; }
+.sc { padding: 7px 18px; border-radius: 30px; font-size: 13px; font-weight: 700; }
+.sc-g { background: rgba(16,185,129,.2); color: #6ee7b7; border: 1px solid rgba(16,185,129,.35); }
+.sc-r { background: rgba(239,68,68,.18);  color: #fca5a5; border: 1px solid rgba(239,68,68,.3);  }
+.sc-w { background: rgba(255,255,255,.12); color: rgba(255,255,255,.8); border: 1px solid rgba(255,255,255,.2); }
+
+.rev-lbl { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #94a3b8; text-transform: uppercase; margin: 24px 0 12px; }
+
+.rev-card { border-radius: 14px; padding: 16px 18px; margin-bottom: 10px; }
+.rev-card.ok  { background: #f0fdf4; border: 1px solid #bbf7d0; }
+.rev-card.bad { background: #fef2f2; border: 1px solid #fecaca; }
+.rev-hdr { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 5px; }
+.rev-ic  { font-size: 15px; flex-shrink: 0; margin-top: 2px; }
+.rev-tl  { font-size: 13px; font-weight: 700; color: #0f172a; }
+.rev-q   { font-size: 12px; color: #64748b; margin: 4px 0 5px 25px; }
+.ans-ok  { font-size: 12px; color: #16a34a; font-weight: 600; margin-left: 25px; }
+.ans-bad { font-size: 12px; color: #dc2626; font-weight: 600; margin-left: 25px; }
+.ai-card {
+    background: #f0f9ff; border: 1px solid #bae6fd;
+    border-radius: 10px; padding: 10px 14px;
+    font-size: 12px; color: #0369a1;
+    margin: 8px 0 0 0; display: flex; gap: 8px;
+}
+
+/* ── STREAMLIT OVERRIDES ── */
 div[data-testid="stFileUploaderDropzone"] {
-    background: rgba(139,92,246,0.05) !important;
-    border: 2px dashed rgba(139,92,246,0.35) !important;
-    border-radius: 16px !important;
+    background: #f8faff !important;
+    border: 2px dashed #93c5fd !important;
+    border-radius: 14px !important;
 }
-div[data-testid="stFileUploaderDropzone"] p { color: rgba(255,255,255,0.5) !important; }
-div[data-testid="stFileUploaderDropzone"] small { color: rgba(255,255,255,0.3) !important; }
-div[data-testid="stFileUploaderDropzone"] svg { fill: rgba(139,92,246,0.6) !important; }
+div[data-testid="stFileUploaderDropzone"] p     { color: #64748b !important; }
+div[data-testid="stFileUploaderDropzone"] small { color: #94a3b8 !important; }
+div[data-testid="stFileUploaderDropzone"] svg   { fill: #93c5fd !important; }
 
-/* Slider */
-div[data-testid="stSlider"] label { color: rgba(255,255,255,0.8) !important; font-weight: 600 !important; font-size: 14px !important; }
-div[data-testid="stSlider"] p { color: rgba(255,255,255,0.4) !important; }
-[data-testid="stSlider"] [role="slider"] { background: #8b5cf6 !important; box-shadow: 0 0 12px rgba(139,92,246,0.7) !important; }
-[data-testid="stSlider"] [data-baseweb="slider"] [role="progressbar"] { background: linear-gradient(90deg,#8b5cf6,#06b6d4) !important; }
+div[data-testid="stSlider"] label { color: #0f172a !important; font-weight: 600 !important; font-size: 14px !important; }
+div[data-testid="stSlider"] p { color: #64748b !important; }
+[data-testid="stSlider"] [role="slider"] { background: #2563eb !important; box-shadow: 0 0 0 4px #dbeafe !important; }
 
-/* Radio buttons */
-[data-testid="stRadio"] label { color: rgba(255,255,255,0.85) !important; font-size: 14px !important; }
+/* Radio — all questions page */
 [data-testid="stRadio"] > div { gap: 8px !important; }
 [data-testid="stRadio"] > div > label {
-    background: rgba(255,255,255,0.04) !important;
-    border: 1.5px solid rgba(255,255,255,0.09) !important;
-    border-radius: 12px !important;
-    padding: 14px 18px !important;
+    background: #f8fafc !important;
+    border: 1.5px solid #e2e8f0 !important;
+    border-radius: 10px !important;
+    padding: 13px 16px !important;
     width: 100% !important;
     cursor: pointer !important;
-    transition: all .2s !important;
-    margin-bottom: 6px !important;
+    transition: all .15s !important;
 }
 [data-testid="stRadio"] > div > label:hover {
-    border-color: #8b5cf6 !important;
-    background: rgba(139,92,246,0.1) !important;
+    border-color: #93c5fd !important;
+    background: #eff6ff !important;
 }
 [data-testid="stRadio"] > div > label[data-checked="true"] {
-    border-color: #8b5cf6 !important;
-    background: rgba(139,92,246,0.15) !important;
-    box-shadow: 0 0 20px rgba(139,92,246,0.2), inset 0 1px 0 rgba(255,255,255,0.07) !important;
+    border-color: #2563eb !important;
+    background: #eff6ff !important;
+    box-shadow: 0 0 0 3px #dbeafe !important;
 }
 [data-testid="stRadio"] > div > label > div:first-child { display: none !important; }
-[data-testid="stRadio"] > div > label > div { color: rgba(255,255,255,0.85) !important; font-weight: 500 !important; }
-[data-testid="stRadio"] > div > label[data-checked="true"] > div { color: #c4b5fd !important; font-weight: 600 !important; }
+[data-testid="stRadio"] > div > label > div { color: #0f172a !important; font-weight: 500 !important; font-size: 14px !important; }
+[data-testid="stRadio"] > div > label[data-checked="true"] > div { color: #1d4ed8 !important; font-weight: 600 !important; }
+[data-testid="stRadio"] label[data-testid="stWidgetLabel"] { display: none !important; }
 
 /* Buttons */
 .stButton > button {
-    border-radius: 14px !important;
+    border-radius: 10px !important;
     font-weight: 700 !important;
     font-size: 14px !important;
-    padding: 14px 22px !important;
-    transition: all .25s !important;
-    letter-spacing: .02em !important;
+    padding: 13px 20px !important;
+    transition: all .2s !important;
     width: 100% !important;
 }
 .stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #8b5cf6, #6366f1) !important;
-    color: #fff !important;
-    border: none !important;
-    box-shadow: 0 4px 24px rgba(99,102,241,0.45), 0 0 0 1px rgba(139,92,246,0.3) !important;
+    background: linear-gradient(135deg, #2563eb, #0ea5e9) !important;
+    color: #fff !important; border: none !important;
+    box-shadow: 0 4px 14px rgba(37,99,235,0.35) !important;
 }
 .stButton > button[kind="primary"]:hover {
-    box-shadow: 0 6px 32px rgba(99,102,241,0.65), 0 0 0 1px rgba(139,92,246,0.5) !important;
-    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(37,99,235,0.5) !important;
+    transform: translateY(-1px) !important;
 }
 .stButton > button[kind="secondary"] {
-    background: rgba(255,255,255,0.05) !important;
-    border: 1.5px solid rgba(255,255,255,0.1) !important;
-    color: rgba(255,255,255,0.7) !important;
+    background: #fff !important;
+    border: 1.5px solid #e2e8f0 !important;
+    color: #374151 !important;
 }
 .stButton > button[kind="secondary"]:hover {
-    background: rgba(139,92,246,0.1) !important;
-    border-color: rgba(139,92,246,0.4) !important;
-    color: #c4b5fd !important;
+    border-color: #93c5fd !important;
+    color: #2563eb !important;
+    background: #eff6ff !important;
 }
-.stButton > button:disabled { opacity: .3 !important; transform: none !important; box-shadow: none !important; cursor: not-allowed !important; }
+.stButton > button:disabled { opacity: .4 !important; transform: none !important; box-shadow: none !important; }
 
-/* Spinner */
-[data-testid="stSpinner"] > div { border-top-color: #8b5cf6 !important; }
-
-/* Caption */
-.stCaption, [data-testid="stCaptionContainer"] p { color: rgba(255,255,255,0.3) !important; font-size: 11px !important; }
-
-/* Alert */
-[data-testid="stAlert"] { border-radius: 12px !important; }
-
-/* Divider */
-hr { border-color: rgba(255,255,255,0.07) !important; }
-
-@keyframes shimmer {
-    0% { background-position: -200% center; }
-    100% { background-position: 200% center; }
-}
-.shine-text {
-    background: linear-gradient(90deg, #a78bfa 0%, #06b6d4 30%, #fff 50%, #06b6d4 70%, #a78bfa 100%);
-    background-size: 200% auto;
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    animation: shimmer 4s linear infinite;
-}
+[data-testid="stSpinner"] > div { border-top-color: #2563eb !important; }
+.stCaption, [data-testid="stCaptionContainer"] p { color: #94a3b8 !important; font-size: 12px !important; }
+[data-testid="stAlert"] { border-radius: 10px !important; }
+hr { border-color: #e2e8f0 !important; }
 </style>
-
-<div class="orb3"></div>
 """, unsafe_allow_html=True)
 
 # ── SESSION STATE ─────────────────────────────────────────────────────────────
@@ -459,9 +354,8 @@ def init():
     for k, v in {
         "step":"upload","slides":[],"filename":"","slide_count":0,
         "word_count":0,"preview":"","num_questions":10,"difficulty":"Medium",
-        "questions":[],"user_answers":{},"current_q":0,
-        "start_time":None,"elapsed":0,"explanations":{},
-        "radio_key":0,
+        "questions":[],"user_answers":{},"start_time":None,
+        "elapsed":0,"explanations":{},"radio_key":0,
     }.items():
         if k not in st.session_state: st.session_state[k] = v
 init()
@@ -487,18 +381,14 @@ def llm(prompt):
         "Content-Type": "application/json",
         "HTTP-Referer": "http://localhost:8501",
         "X-Title": "AI Quiz Generator",
-    }, json={"model":MODEL,"messages":[{"role":"user","content":prompt}],"temperature":.7,"max_tokens":4096}, timeout=120)
+    }, json={"model":MODEL,"messages":[{"role":"user","content":prompt}],
+             "temperature":.7,"max_tokens":4096}, timeout=120)
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]
 
 def gen_mcqs(slides, n, diff):
     txt = "\n\n".join(f"[Slide {s['slide']}]: {s['text']}" for s in slides)
-    raw = llm(f"""Expert quiz designer. Generate exactly {n} MCQs from these slides.
-DIFFICULTY: {diff} — {DIFF_PROMPTS[diff]}
-SLIDES:\n{txt}
-Rules: 4 options A-D, one correct, plausible distractors, spread across topics.
-Return ONLY valid JSON array, no markdown:
-[{{"id":1,"question":"...","options":{{"A":"...","B":"...","C":"...","D":"..."}},"correct":"B","topic":"label"}}]""")
+    raw = llm(f"""Expert quiz designer. Generate exactly {n} MCQs.\nDIFFICULTY: {diff} — {DIFF_PROMPTS[diff]}\nSLIDES:\n{txt}\nRules: 4 options A-D, one correct, plausible distractors, spread across topics.\nReturn ONLY valid JSON array, no markdown:\n[{{"id":1,"question":"...","options":{{"A":"...","B":"...","C":"...","D":"..."}},"correct":"B","topic":"label"}}]""")
     return json.loads(re.sub(r"```(?:json)?","",raw).strip().strip("`").strip())
 
 def gen_exp(questions, answers):
@@ -507,64 +397,81 @@ def gen_exp(questions, answers):
     block = "\n\n".join(
         f"Q{w['id']}: {w['question']}\nStudent: {answers[str(w['id'])]} — {w['options'].get(answers[str(w['id'])],'')} \nCorrect: {w['correct']} — {w['options'][w['correct']]}"
         for w in wrong)
-    raw = llm(f"For each wrong answer write 1-2 sentences: why wrong + why correct is right.\n{block}\nReturn ONLY JSON: {{\"1\":\"...\"}}")
+    raw = llm(f"For each wrong answer write 1-2 sentences: why it's wrong and why the correct answer is right.\n{block}\nReturn ONLY JSON: {{\"1\":\"...\"}}")
     return json.loads(re.sub(r"```(?:json)?","",raw).strip().strip("`").strip())
 
-# ── NAVBAR ────────────────────────────────────────────────────────────────────
-steps = {"upload":"Step 1 of 3","config":"Step 2 of 3",
-         "quiz":f"Q {st.session_state.current_q+1}/{len(st.session_state.questions)}",
-         "results":"Complete ✓"}
+# ── TOPBAR ────────────────────────────────────────────────────────────────────
+badge = {"upload":"Step 1 of 3","config":"Step 2 of 3","quiz":"In Progress","results":"Completed"}
 st.markdown(f"""
-<div class="navbar">
-  <div class="nb-brand"><div class="nb-logo">🎯</div> AI Quiz Generator</div>
-  <span class="nb-step">{steps.get(st.session_state.step,'')}</span>
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">🎯</div>
+    AI Quiz Generator
+  </div>
+  <span class="topbar-badge">{badge.get(st.session_state.step,'')}</span>
 </div>
 """, unsafe_allow_html=True)
+
+# ── STEP INDICATOR ────────────────────────────────────────────────────────────
+step_order = ["upload","config","quiz","results"]
+step_names = ["Upload","Configure","Quiz","Results"]
+cur = step_order.index(st.session_state.step)
+
+steps_html = '<div class="steps-row">'
+for idx, (s, name) in enumerate(zip(step_order, step_names)):
+    if idx < cur:   cls, lcls = "done", ""
+    elif idx == cur: cls, lcls = "active", "active-lbl"
+    else:            cls, lcls = "", ""
+    steps_html += f'<div class="step-item"><div class="step-circle {cls}">{"✓" if idx < cur else idx+1}</div><span class="step-label {lcls}">{name}</span></div>'
+    if idx < 3:
+        steps_html += f'<div class="step-line {"done-line" if idx < cur else ""}"></div>'
+steps_html += '</div>'
+st.markdown(steps_html, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SCREEN 1 — UPLOAD
 # ══════════════════════════════════════════════════════════════════════════════
 if st.session_state.step == "upload":
     st.markdown("""
-    <div class="sec-header">
-      <div class="sec-tag">Step 1 of 3</div>
-      <div class="sec-title">Upload Your <span>Presentation</span></div>
-      <div class="sec-sub">Drop your .pptx and we'll extract every word automatically</div>
+    <div class="pg-heading">
+      <h1>Upload Your Presentation</h1>
+      <p>Drop your .pptx file — we'll extract all content and generate a quiz from it</p>
     </div>
-    <div class="upload-area">
-      <span class="upload-icon">📂</span>
-      <h2>Drag & drop your .pptx here</h2>
-      <p>.pptx only &nbsp;·&nbsp; max 25 MB</p>
+    <div class="upload-zone">
+      <span class="uz-icon">📂</span>
+      <h3>Drag & drop your .pptx here</h3>
+      <p>.pptx files only &nbsp;·&nbsp; max 25 MB</p>
     </div>
     """, unsafe_allow_html=True)
 
-    uploaded = st.file_uploader("Upload your PowerPoint file", type=["pptx"], label_visibility="collapsed")
+    uploaded = st.file_uploader("Upload PowerPoint", type=["pptx"], label_visibility="collapsed")
 
     if uploaded:
         if uploaded.size > 25*1024*1024:
-            st.error("File exceeds 25 MB.")
+            st.error("File exceeds 25 MB limit.")
         else:
-            with st.spinner("Parsing slides…"):
+            with st.spinner("Parsing your presentation…"):
                 try:
                     slides, wc = extract_pptx(uploaded.read())
-                    if not slides: st.error("No text found in this file.")
+                    if not slides:
+                        st.error("No readable text found in this file.")
                     else:
                         st.session_state.update(slides=slides, filename=uploaded.name,
                             slide_count=len(slides), word_count=wc,
                             preview=slides[0]["text"][:220])
                         st.markdown(f"""
-                        <div class="parsed-card">
-                          <span class="pi">📄</span>
-                          <div class="pt">
+                        <div class="parsed-row">
+                          <span class="pr-icon">📄</span>
+                          <div class="pr-info">
                             <strong>{uploaded.name}</strong>
                             <span>{len(slides)} slides parsed &nbsp;·&nbsp; {wc:,} words extracted</span>
                           </div>
-                          <span class="parsed-badge">✓ Ready</span>
+                          <span class="badge-ok">✓ Ready</span>
                         </div>
                         """, unsafe_allow_html=True)
                         st.caption(f"Preview: {st.session_state.preview}…")
                 except Exception as e:
-                    st.error(f"Parse error: {e}")
+                    st.error(f"Failed to parse: {e}")
 
     st.write("")
     if st.button("Continue →", type="primary", disabled=not bool(st.session_state.slides)):
@@ -575,16 +482,15 @@ if st.session_state.step == "upload":
 # ══════════════════════════════════════════════════════════════════════════════
 elif st.session_state.step == "config":
     st.markdown("""
-    <div class="sec-header">
-      <div class="sec-tag">Step 2 of 3</div>
-      <div class="sec-title">Configure Your <span>Quiz</span></div>
-      <div class="sec-sub">Choose difficulty and how many questions to generate</div>
+    <div class="pg-heading">
+      <h1>Configure Your Quiz</h1>
+      <p>Set the number of questions and choose how challenging you want them</p>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown(f"""
-    <div class="src-pill">
-      📎 &nbsp;<strong style="color:#fff">{st.session_state.filename}</strong>
+    <div class="src-strip">
+      📎 &nbsp;<strong>{st.session_state.filename}</strong>
       &nbsp;·&nbsp; {st.session_state.slide_count} slides &nbsp;·&nbsp; {st.session_state.word_count:,} words
     </div>
     """, unsafe_allow_html=True)
@@ -593,24 +499,25 @@ elif st.session_state.step == "config":
         "Number of questions", min_value=5, max_value=30,
         value=st.session_state.num_questions)
 
-    st.markdown('<span class="sec-lbl">Difficulty Level</span>', unsafe_allow_html=True)
+    st.markdown('<span class="slbl">Difficulty Level</span>', unsafe_allow_html=True)
+
     DMETA = [("Simple","🟢"),("Medium","🟡"),("Complex","🔴")]
     cols = st.columns(3)
-    for col,(name,emoji) in zip(cols, DMETA):
+    for col, (name, emoji) in zip(cols, DMETA):
         with col:
-            on = "on" if st.session_state.difficulty == name else ""
-            st.markdown(f'<div class="diff-tile {on}"><span class="de">{emoji}</span><span class="dn">{name}</span></div>', unsafe_allow_html=True)
-            if st.button(name, key=f"d_{name}", type="primary" if on else "secondary"):
+            sel = "sel" if st.session_state.difficulty == name else ""
+            st.markdown(f'<div class="diff-box {sel}"><span class="db-emoji">{emoji}</span><span class="db-name">{name}</span></div>', unsafe_allow_html=True)
+            if st.button(name, key=f"d_{name}", type="primary" if sel else "secondary"):
                 st.session_state.difficulty = name; st.rerun()
 
-    st.markdown(f'<div class="hint-box"><span>💡</span><span>{DIFF_HINTS[st.session_state.difficulty]}</span></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="hint-strip"><span>ℹ️</span><span>{DIFF_HINTS[st.session_state.difficulty]}</span></div>', unsafe_allow_html=True)
 
     if st.button(f"⚡  Generate {st.session_state.num_questions} Questions", type="primary"):
-        with st.spinner("AI is crafting your quiz — takes ~15 sec…"):
+        with st.spinner("AI is crafting your quiz — takes ~15 seconds…"):
             try:
                 qs = gen_mcqs(st.session_state.slides, st.session_state.num_questions, st.session_state.difficulty)
-                st.session_state.update(questions=qs, user_answers={}, current_q=0,
-                                        start_time=time.time(), step="quiz", radio_key=0)
+                st.session_state.update(questions=qs, user_answers={}, start_time=time.time(),
+                                        step="quiz", radio_key=st.session_state.radio_key+1)
                 st.rerun()
             except json.JSONDecodeError:
                 st.error("AI returned malformed JSON — please retry.")
@@ -618,64 +525,70 @@ elif st.session_state.step == "config":
                 st.error(f"Generation failed: {e}")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SCREEN 3 — QUIZ
+# SCREEN 3 — QUIZ  (all questions on one scrollable page)
 # ══════════════════════════════════════════════════════════════════════════════
 elif st.session_state.step == "quiz":
     questions = st.session_state.questions
-    total = len(questions)
-    i     = st.session_state.current_q
-    q     = questions[i]
-    qid   = str(q["id"])
+    total     = len(questions)
+    answered  = len(st.session_state.user_answers)
+    elapsed   = int(time.time() - (st.session_state.start_time or time.time()))
+    m, s      = divmod(elapsed, 60)
+    pct       = int((answered / total) * 100)
 
-    elapsed    = int(time.time() - (st.session_state.start_time or time.time()))
-    m, s       = divmod(elapsed, 60)
-    pct        = int((i / total) * 100)
-    answered   = len(st.session_state.user_answers)
+    st.markdown(f"""
+    <div class="quiz-topbar">
+      <div class="qt-left">
+        <span class="qt-title">{st.session_state.filename}</span>
+        <span class="qt-sub">{st.session_state.difficulty} difficulty &nbsp;·&nbsp; {total} questions</span>
+      </div>
+      <div class="qt-right">
+        <span class="answered-pill">{answered}/{total} answered</span>
+        <span class="timer-box">⏱ {m:02d}:{s:02d}</span>
+      </div>
+    </div>
+    <div class="pbar-outer"><div class="pbar-inner" style="width:{pct}%"></div></div>
+    """, unsafe_allow_html=True)
 
-    c1, c2 = st.columns([3,1])
-    with c1:
-        st.markdown(f'<div class="q-num">QUESTION {i+1} OF {total} &nbsp;·&nbsp; {answered} ANSWERED</div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown(f'<div class="timer">⏱ {m:02d}:{s:02d}</div>', unsafe_allow_html=True)
+    # All questions rendered on one page
+    for idx, q in enumerate(questions):
+        qid  = str(q["id"])
+        opts = [f"**{k}.**  {v}" for k, v in q["options"].items()]
+        keys = list(q["options"].keys())
+        cur  = st.session_state.user_answers.get(qid)
+        default = keys.index(cur) if cur in keys else None
 
-    st.markdown(f'<div class="pbar-wrap"><div class="pbar-fill" style="width:{pct}%"></div></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="q-text">{q["question"]}</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="q-card">
+          <span class="q-num-tag">Q{idx+1}</span>
+          <span class="q-topic-tag">{q.get('topic','')}</span>
+          <div class="q-text">{q['question']}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # Radio for answer — only one element, no duplicates
-    opts    = [f"**{k}** &nbsp; {v}" for k, v in q["options"].items()]
-    keys    = list(q["options"].keys())
-    current = st.session_state.user_answers.get(qid)
-    default = keys.index(current) if current in keys else None
+        choice = st.radio(
+            f"q_{idx}",
+            options=opts,
+            index=default,
+            key=f"r_{idx}_{st.session_state.radio_key}",
+            label_visibility="collapsed",
+        )
+        if choice is not None:
+            chosen = keys[opts.index(choice)]
+            st.session_state.user_answers[qid] = chosen
 
-    choice = st.radio(
-        "Choose your answer",
-        options=opts,
-        index=default,
-        key=f"radio_{i}_{st.session_state.radio_key}",
-        label_visibility="collapsed",
-    )
-    if choice is not None:
-        chosen_key = keys[opts.index(choice)]
-        st.session_state.user_answers[qid] = chosen_key
+        st.write("")
 
-    st.write("")
-    cp, cn = st.columns(2)
-    with cp:
-        if i > 0:
-            if st.button("← Previous", type="secondary"):
-                st.session_state.current_q -= 1
-                st.rerun()
-    with cn:
-        lbl = "Submit Quiz ✓" if i == total-1 else "Next →"
-        if st.button(lbl, type="primary"):
-            if i < total-1:
-                st.session_state.current_q += 1; st.rerun()
-            else:
-                st.session_state.elapsed = int(time.time()-st.session_state.start_time)
-                with st.spinner("Generating AI explanations…"):
-                    try: st.session_state.explanations = gen_exp(questions, st.session_state.user_answers)
-                    except: st.session_state.explanations = {}
-                st.session_state.step = "results"; st.rerun()
+    st.divider()
+    unanswered = total - len(st.session_state.user_answers)
+    if unanswered:
+        st.warning(f"⚠️  {unanswered} question{'s' if unanswered>1 else ''} not answered yet.")
+
+    if st.button("Submit Quiz ✓", type="primary"):
+        st.session_state.elapsed = int(time.time() - st.session_state.start_time)
+        with st.spinner("Generating AI feedback…"):
+            try: st.session_state.explanations = gen_exp(questions, st.session_state.user_answers)
+            except: st.session_state.explanations = {}
+        st.session_state.step = "results"; st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SCREEN 4 — RESULTS
@@ -688,48 +601,46 @@ elif st.session_state.step == "results":
     pct     = round((correct/total)*100) if total else 0
     m, s    = divmod(st.session_state.elapsed, 60)
 
-    hl = ("Perfect score! 🎉" if pct==100 else "Outstanding! 🌟" if pct>=90
-          else "Great job! 💪" if pct>=80 else "Good effort 📚" if pct>=60 else "Keep going 🚀")
+    hl = ("Perfect score! 🎉" if pct==100 else "Excellent work! 🌟" if pct>=90
+          else "Great job! 💪" if pct>=80 else "Good effort — keep reviewing 📚" if pct>=60
+          else "Keep studying — you'll get there! 🚀")
 
     st.markdown(f"""
-    <div class="sec-header" style="margin-bottom:20px">
-      <div class="sec-tag">Results</div>
-      <div class="sec-title"><span class="shine-text">{hl}</span></div>
-    </div>
-    <div class="score-hero">
-      <div class="score-big">{correct}/{total}</div>
+    <div class="score-banner">
+      <div class="score-num">{correct}/{total}</div>
       <div class="score-pct">{pct}% Score</div>
-      <div class="score-hl">{st.session_state.difficulty} difficulty &nbsp;·&nbsp; {st.session_state.slide_count} slides</div>
-      <div class="chips">
-        <span class="chip chip-g">✓ {correct} correct</span>
-        <span class="chip chip-r">✗ {wrong} wrong</span>
-        <span class="chip chip-o">⏱ {m:02d}:{s:02d}</span>
+      <div class="score-hl">{hl}</div>
+      <div class="score-chips">
+        <span class="sc sc-g">✓ {correct} Correct</span>
+        <span class="sc sc-r">✗ {wrong} Wrong</span>
+        <span class="sc sc-w">⏱ {m:02d}:{s:02d} Time</span>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="rev-lbl">Review &amp; AI Feedback</div>', unsafe_allow_html=True)
+    st.markdown('<div class="rev-lbl">Detailed Review &amp; AI Feedback</div>', unsafe_allow_html=True)
 
     for idx, q in enumerate(questions):
         qid = str(q["id"])
         ua  = st.session_state.user_answers.get(qid)
         ok  = ua == q["correct"]
-        cls = "rev-ok" if ok else "rev-bad"
+        cls = "ok" if ok else "bad"
         ic  = "✅" if ok else "❌"
 
         if ok:
             ans = f'<div class="ans-ok">Your answer: {ua} — {q["options"].get(ua,"")} ✓</div>'
         elif ua:
-            ans = f'<div class="ans-bad">You chose {ua}: {q["options"].get(ua,"")} &nbsp;·&nbsp; Correct: {q["correct"]}: {q["options"][q["correct"]]}</div>'
+            ans = (f'<div class="ans-bad">You chose {ua}: {q["options"].get(ua,"")} &nbsp;·&nbsp; '
+                   f'Correct: {q["correct"]}: {q["options"][q["correct"]]}</div>')
         else:
             ans = f'<div class="ans-bad">Not answered &nbsp;·&nbsp; Correct: {q["correct"]}: {q["options"][q["correct"]]}</div>'
 
         exp = st.session_state.explanations.get(qid,"")
-        ai  = f'<div class="ai-row"><span>🤖</span><span>{exp}</span></div>' if (not ok and exp) else ""
+        ai  = f'<div class="ai-card"><span>🤖</span><span>{exp}</span></div>' if (not ok and exp) else ""
 
         st.markdown(f"""
-        <div class="rev-item {cls}">
-          <div class="rev-hd"><span class="rev-ic">{ic}</span><span class="rev-tl">Q{idx+1} · {q.get('topic','')}</span></div>
+        <div class="rev-card {cls}">
+          <div class="rev-hdr"><span class="rev-ic">{ic}</span><span class="rev-tl">Q{idx+1} · {q.get('topic','')}</span></div>
           <div class="rev-q">{q['question']}</div>
           {ans}{ai}
         </div>
@@ -739,8 +650,8 @@ elif st.session_state.step == "results":
     c1, c2 = st.columns(2)
     with c1:
         if st.button("↺  Retake Quiz", type="primary"):
-            st.session_state.update(user_answers={}, current_q=0,
-                start_time=time.time(), explanations={}, step="quiz", radio_key=st.session_state.radio_key+1)
+            st.session_state.update(user_answers={}, start_time=time.time(),
+                explanations={}, step="quiz", radio_key=st.session_state.radio_key+1)
             st.rerun()
     with c2:
         if st.button("↑  Upload New PPT", type="secondary"):
