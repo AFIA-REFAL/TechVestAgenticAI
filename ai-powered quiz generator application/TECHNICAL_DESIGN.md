@@ -1,6 +1,6 @@
 # Technical Design — AI Quiz Generator
 
-**Version:** 1.0  
+**Version:** 2.0  
 **Date:** June 2026  
 **Author:** AFIA-REFAL  
 **Project:** TechVest Agentic AI — Academic Year 2025–26
@@ -9,7 +9,7 @@
 
 ## 1. Architecture Overview
 
-AI Quiz Generator is a **single-file, single-process Streamlit application**. There is no separate backend server, database, or API layer. All logic — UI rendering, file parsing, AI calls, and state management — lives in `app.py` and executes within one Python process.
+AI Quiz Generator is a **single-file, single-process Streamlit application**. There is no separate backend server, database, or API layer. All logic — UI rendering, multi-format file parsing, AI calls, and state management — lives in `app.py` and executes within one Python process.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -21,9 +21,13 @@ AI Quiz Generator is a **single-file, single-process Streamlit application**. Th
 │                    Streamlit Server (Python)                  │
 │  ┌──────────────┐  ┌────────────────┐  ┌──────────────────┐ │
 │  │  UI Layer    │  │  Session State │  │  Backend Logic   │ │
-│  │  (CSS + HTML)│  │  (st.session_  │  │  extract_pptx()  │ │
-│  │  + Widgets   │  │   state dict)  │  │  llm()           │ │
-│  └──────────────┘  └────────────────┘  │  gen_mcqs()      │ │
+│  │  (CSS + HTML)│  │  (st.session_  │  │  extract_file()  │ │
+│  │  + Widgets   │  │   state dict)  │  │  ├─ extract_pptx │ │
+│  └──────────────┘  └────────────────┘  │  ├─ extract_pdf  │ │
+│                                        │  ├─ extract_docx │ │
+│                                        │  ├─ extract_txt  │ │
+│                                        │  llm()           │ │
+│                                        │  gen_mcqs()      │ │
 │                                        │  gen_exp()       │ │
 │                                        └──────┬───────────┘ │
 └─────────────────────────────────────────────┬─┘─────────────┘
@@ -45,7 +49,7 @@ Streamlit was chosen because it allows a Python developer to build a fully inter
 
 **Trade-offs:**
 - Pro: Rapid development, no frontend build tooling required.
-- Con: Full page re-render on every interaction. Worked around using `st.rerun()` only when state transitions are needed, not on every click.
+- Con: Full page re-render on every interaction. Worked around using `st.rerun()` only when state transitions are needed.
 - Con: Streamlit's default widget styling is opinionated. Overridden entirely with injected CSS targeting internal `data-testid` selectors.
 
 ### 2.2 OpenRouter / Claude Haiku
@@ -55,15 +59,59 @@ OpenRouter provides a single API endpoint that proxies multiple AI providers. `a
 **Trade-offs:**
 - Pro: Single API key, model can be swapped by changing one constant.
 - Con: Requires internet; no offline mode.
-- Con: Response quality depends on prompt design (see Section 4).
 
 ### 2.3 python-pptx
 
-The `python-pptx` library extracts text from every `TextFrame` across all shapes on all slides. It is pure Python with no native dependencies, making installation straightforward on all platforms including Python 3.14 using `--only-binary=:all:`.
+Extracts text from every `TextFrame` across all shapes on all slides. Pure Python, no native dependencies.
+
+### 2.4 pypdf
+
+Extracts text from each page of a PDF using embedded text streams. Pure Python. Does not support scanned/image-based PDFs (no OCR).
+
+### 2.5 python-docx
+
+Reads `.docx` XML structure and exposes paragraphs. Paragraphs are grouped into chunks of ~12 to simulate "sections" for the AI prompt.
+
+### 2.6 Plain Text (.txt)
+
+Decoded as UTF-8 and split into 250-word chunks. No external library required.
 
 ---
 
-## 3. Application State Machine
+## 3. Multi-Format File Parsing
+
+### 3.1 Dispatcher — `extract_file(b, filename)`
+
+All format routing goes through a single dispatcher that inspects the file extension and calls the appropriate parser:
+
+```python
+def extract_file(b: bytes, filename: str) -> tuple[list[dict], int]:
+    ext = filename.rsplit(".", 1)[-1].lower()
+    if ext == "pptx": return extract_pptx(b)
+    if ext == "pdf":  return extract_pdf(b)
+    if ext == "docx": return extract_docx(b)
+    if ext == "txt":  return extract_txt(b)
+    raise ValueError(f"Unsupported file type: .{ext}")
+```
+
+All parsers return the same structure: `(list[{slide: int, text: str}], total_word_count)`. The `slide` field is a generic section index regardless of format, allowing `gen_mcqs` to work identically for all formats.
+
+### 3.2 Format Comparison
+
+| Format | Parser | Section Unit | Content Source |
+|---|---|---|---|
+| `.pptx` | `python-pptx` | 1 slide = 1 section | All text frames in all shapes |
+| `.pdf` | `pypdf` | 1 page = 1 section | Embedded text stream per page |
+| `.docx` | `python-docx` | ~12 paragraphs = 1 section | Paragraph text |
+| `.txt` | built-in | 250 words = 1 chunk | Raw decoded string |
+
+### 3.3 Empty Section Handling
+
+All parsers skip sections that produce empty or whitespace-only text after joining. This handles image-only slides, blank pages, and whitespace-only paragraphs without errors.
+
+---
+
+## 4. Application State Machine
 
 The application is driven by `st.session_state.step`, which acts as the current screen indicator. Navigation between screens is triggered by button clicks that mutate this value followed by `st.rerun()`.
 
@@ -81,7 +129,7 @@ The application is driven by `st.session_state.step`, which acts as the current 
              └────┬─────┘
         submitted │
              ┌────▼─────┐
-             │ results  │──── upload new ──► upload (reset)
+             │ results  │──── upload new ──► upload (reset, history preserved)
              └──────────┘
 ```
 
@@ -93,10 +141,10 @@ A second state variable, `st.session_state.nav_page`, controls which sidebar pag
 |---|---|---|
 | `step` | `str` | Current quiz screen: `upload`, `config`, `quiz`, `results` |
 | `nav_page` | `str` | Active sidebar tab: `home`, `analytics`, `history`, `settings` |
-| `slides` | `list[dict]` | Parsed slide data: `[{slide: int, text: str}]` |
-| `filename` | `str` | Uploaded file name |
-| `slide_count` | `int` | Number of slides with extractable text |
-| `word_count` | `int` | Total word count across all slides |
+| `slides` | `list[dict]` | Parsed content sections: `[{slide: int, text: str}]` |
+| `filename` | `str` | Uploaded file name (includes extension) |
+| `slide_count` | `int` | Number of non-empty sections extracted |
+| `word_count` | `int` | Total word count across all sections |
 | `num_questions` | `int` | Configured question count (5–30) |
 | `difficulty` | `str` | `Simple`, `Medium`, or `Complex` |
 | `questions` | `list[dict]` | Generated MCQ objects from AI |
@@ -110,177 +158,139 @@ A second state variable, `st.session_state.nav_page`, controls which sidebar pag
 
 ---
 
-## 4. Backend Functions
+## 5. Backend Functions
 
-### 4.1 `extract_pptx(b: bytes) → tuple[list[dict], int]`
+### 5.1 `extract_pptx(b: bytes) → tuple[list[dict], int]`
 
-Parses a `.pptx` binary using `python-pptx`. Iterates over every slide, collects all paragraph text from all shapes that have a `TextFrame`, strips whitespace, joins into a single string per slide, and skips slides that produce no text (e.g. image-only slides).
+Parses `.pptx` binary using `python-pptx`. Iterates over every slide, collects all paragraph text from shapes with a `TextFrame`. Each slide becomes one section dict.
 
-Returns a list of `{slide: int, text: str}` dicts and the total word count.
+### 5.2 `extract_pdf(b: bytes) → tuple[list[dict], int]`
 
-```python
-def extract_pptx(b):
-    prs = Presentation(BytesIO(b))
-    slides, words = [], 0
-    for i, slide in enumerate(prs.slides, 1):
-        txt = [p.text.strip()
-               for s in slide.shapes if s.has_text_frame
-               for p in s.text_frame.paragraphs if p.text.strip()]
-        c = " ".join(txt)
-        if c:
-            slides.append({"slide": i, "text": c})
-            words += len(c.split())
-    return slides, words
-```
+Parses PDF binary using `pypdf.PdfReader`. Calls `page.extract_text()` for each page. Falls back to empty string if extraction returns `None`. Each page becomes one section dict.
 
-### 4.2 `llm(prompt: str) → str`
+### 5.3 `extract_docx(b: bytes) → tuple[list[dict], int]`
 
-Sends a single-turn chat completion request to the OpenRouter API. Uses `requests.post` with a 120-second timeout. Returns the raw text content of the first choice message.
+Parses `.docx` binary using `python-docx`. Iterates over all paragraphs in document order. Accumulates paragraphs in a buffer; flushes into a section every 12 non-empty paragraphs. Remaining paragraphs form the final section.
 
-Headers sent:
-- `Authorization: Bearer <key>`
-- `HTTP-Referer: http://localhost:8501` (required by OpenRouter)
-- `X-Title: AI Quiz Generator`
+### 5.4 `extract_txt(b: bytes) → tuple[list[dict], int]`
 
-### 4.3 `gen_mcqs(slides, n, diff) → list[dict]`
+Decodes bytes as UTF-8, splits on whitespace. Divides into chunks of 250 words using `range(0, len(words), 250)`. Each chunk becomes one section dict.
 
-Constructs a prompt that embeds all slide text, specifies the difficulty via a pre-written instruction string, and instructs the model to return a JSON array. After receiving the response, strips any markdown code fences and parses with `json.loads`.
+### 5.5 `extract_file(b, filename)` — Dispatcher
 
-**MCQ schema returned by AI:**
+Routes to the appropriate parser based on lowercase file extension. Raises `ValueError` for unsupported types.
+
+### 5.6 `llm(prompt: str) → str`
+
+Sends a single-turn chat completion request to the OpenRouter API with a 120-second timeout. Returns the raw text content of the first choice message.
+
+### 5.7 `gen_mcqs(slides, n, diff) → list[dict]`
+
+Constructs a prompt embedding all section text (labelled `[Section N]` regardless of source format), specifies difficulty, and requests a JSON array. Strips markdown fences before parsing.
+
+**MCQ schema:**
 ```json
-[
-  {
-    "id": 1,
-    "question": "...",
-    "options": {"A": "...", "B": "...", "C": "...", "D": "..."},
-    "correct": "B",
-    "topic": "label"
-  }
-]
+{
+  "id": 1,
+  "question": "...",
+  "options": {"A": "...", "B": "...", "C": "...", "D": "..."},
+  "correct": "B",
+  "topic": "label"
+}
 ```
 
-**Difficulty prompts:**
+### 5.8 `gen_exp(questions, answers) → dict[str, str]`
 
-| Level | Instruction |
-|---|---|
-| Simple | Factual recall — definitions, key terms, basic concepts directly from slides |
-| Medium | Mix of factual recall and scenario-based reasoning |
-| Complex | Analytical questions requiring deep understanding, edge-cases, trade-offs |
-
-### 4.4 `gen_exp(questions, answers) → dict[str, str]`
-
-Filters the question list to only wrong answers, constructs a block showing what the student selected vs. the correct answer, and asks the AI to produce a 1–2 sentence explanation per wrong answer. Returns a dict mapping question ID strings to explanation strings.
-
-Returns `{}` if all answers were correct (no AI call needed).
+Filters to wrong answers only, sends a single prompt requesting 1–2 sentence explanations per wrong answer, returns a dict of `{question_id: explanation}`. Returns `{}` if all answers were correct.
 
 ---
 
-## 5. UI Architecture
+## 6. UI Architecture
 
-### 5.1 Layout Structure
-
-The layout uses two Streamlit columns. The left column (6% width) renders the nav dock. The right column (94%) renders the header and content area.
+### 6.1 Layout Structure
 
 ```
 st.columns([0.06, 0.94])
     ├── nav_col   → nav dock with 4 icon buttons
     └── main_col
-        ├── top header HTML (title + step progress)
+        ├── top header HTML (gradient brand title + step progress)
         └── st.columns([1, 3, 1])   ← centers the glass panel
                └── center col
                    └── screen content (upload / config / quiz / results)
                        or nav page content (analytics / history / settings)
 ```
 
-### 5.2 CSS Strategy
+### 6.2 Upload Screen — Format-Aware
 
-All custom styling is injected via `st.markdown("<style>...</style>", unsafe_allow_html=True)` at app startup. Streamlit's internal elements are targeted using their `data-testid` attributes:
+The upload zone shows all 4 format badges (`.pptx`, `.pdf`, `.docx`, `.txt`). The `st.file_uploader` is configured with `type=["pptx","pdf","docx","txt"]`. After upload, the processing animation labels dynamically reflect the detected format (e.g. "Extracting pages from PDF…" vs "Extracting slides from PPTX…"). The success card shows a format-specific emoji icon.
+
+### 6.3 CSS Strategy
+
+All custom styling is injected via `st.markdown("<style>...</style>")`. Key Streamlit selectors:
 
 | Target | Selector |
 |---|---|
 | Main container | `[data-testid="block-container"]` |
-| Streamlit header bar | `[data-testid="stHeader"]` |
+| Streamlit header | `[data-testid="stHeader"]` |
 | Default sidebar | `[data-testid="stSidebar"]` |
 | Column wrappers | `[data-testid="column"]` |
-| Vertical block wrappers | `[data-testid="stVerticalBlock"]` |
 | File uploader | `[data-testid="stFileUploaderDropzone"]` |
-| Slider | `[data-testid="stSlider"]` |
 | Buttons | `.stButton > button[kind="primary|secondary"]` |
 
-**Key CSS techniques used:**
-- **Glassmorphism:** `backdrop-filter: blur(32px)` + `rgba` background on `.glass-panel`
+**Key CSS techniques:**
+- **Glassmorphism:** `backdrop-filter: blur(32px)` + `rgba` background
 - **Gradient mesh background:** Two `radial-gradient` layers on `stAppViewContainer`
-- **Animated shimmer:** `@keyframes shimmer` with `background-position` sweep on score text
-- **Floating icon:** `@keyframes floatIcon` using `translateY` on the upload icon
-- **Pulse rings:** `@keyframes pulseRing` using `scale` + `opacity` for AI processing animation
-- **Overflow fix:** All Streamlit column containers forced to `overflow: visible` to prevent card clipping
+- **Animated shimmer:** `@keyframes shimmer` with `background-position` sweep
+- **Floating icon:** `@keyframes floatIcon` using `translateY`
+- **Pulse rings:** `@keyframes pulseRing` using `scale` + `opacity`
+- **Overflow fix:** All Streamlit column containers forced to `overflow: visible`
 
-### 5.3 Option Selection Pattern
+### 6.4 Option Selection Pattern
 
-Streamlit does not natively support custom-styled radio button feedback. The solution uses `st.button` with `type="primary"` for the selected option and `type="secondary"` for all others, keyed with a `rk` (render key) that increments on retake to force React to unmount and re-mount buttons cleanly.
-
-```python
-for key, val in q["options"].items():
-    picked = sel == key
-    if st.button(f"{key}   {val}",
-                 key=f"o_{i}_{key}_{st.session_state.rk}",
-                 type="primary" if picked else "secondary"):
-        st.session_state.user_answers[qid] = key
-        st.rerun()
-```
+Streamlit does not support custom-styled radio feedback. Solution uses `st.button` with `type="primary"` for selected option and `type="secondary"` for others, keyed with `rk` that increments on retake.
 
 ---
 
-## 6. Data Flow
+## 7. Data Flow
 
 ```
-User uploads .pptx
+User uploads file (.pptx / .pdf / .docx / .txt)
         │
         ▼
-extract_pptx(bytes)
-  → list of {slide, text} dicts
+extract_file(bytes, filename)
+  → dispatches to format-specific parser
+  → list of {slide, text} sections + word count
         │
         ▼
 User configures n, difficulty
         │
         ▼
-gen_mcqs(slides, n, difficulty)
-  → prompt construction
-  → llm(prompt)
-    → POST /chat/completions
-    → raw JSON string response
-  → json.loads(cleaned_response)
-  → list of MCQ dicts stored in session_state.questions
+gen_mcqs(sections, n, difficulty)
+  → prompt: [Section N]: <text> for all sections
+  → llm() → POST /chat/completions
+  → parse JSON → list of MCQ dicts
         │
         ▼
-User takes quiz
-  → user_answers[qid] = selected_key per question
+User takes quiz (user_answers updated per question)
         │
         ▼
 On submit:
   gen_exp(questions, user_answers)
-  → filters wrong answers only
-  → llm(explanation prompt)
-  → dict of {qid: explanation}
-  → stored in session_state.explanations
+  → wrong answers only
+  → llm() → explanation dict
         │
         ▼
-Results rendered from:
-  session_state.questions
-  session_state.user_answers
-  session_state.explanations
+Results screen + history saved
 ```
 
 ---
 
-## 7. API Integration
+## 8. API Integration
 
-### 7.1 Request Format
+### 8.1 Request Format
 
-```
+```json
 POST https://openrouter.ai/api/v1/chat/completions
-Content-Type: application/json
-Authorization: Bearer <OPENROUTER_API_KEY>
 
 {
   "model": "anthropic/claude-haiku-4-5",
@@ -290,56 +300,60 @@ Authorization: Bearer <OPENROUTER_API_KEY>
 }
 ```
 
-### 7.2 Response Parsing
+### 8.2 Response Parsing
 
-The model is instructed to return only raw JSON with no markdown fences. As a safety measure, the parser strips any ` ```json ` or ` ``` ` wrappers before calling `json.loads`. A `json.JSONDecodeError` is caught and surfaced to the user as a retry prompt.
+The model is instructed to return only raw JSON. As a safety measure, any ` ```json ` or ` ``` ` wrappers are stripped before `json.loads`. A `json.JSONDecodeError` is caught and surfaced as a retry prompt.
 
-### 7.3 Timeout
+### 8.3 Prompt Design
 
-All requests use a 120-second timeout. For large slide decks (30+ slides), generation can take 20–40 seconds due to prompt size.
+The `gen_mcqs` prompt labels content sections as `[Section N]` regardless of source format, keeping the prompt format-agnostic. Difficulty is injected via a pre-written instruction string for each level.
 
 ---
 
-## 8. Error Handling
+## 9. Error Handling
 
 | Scenario | Handling |
 |---|---|
 | File > 25 MB | Checked before parsing; `st.error` shown |
-| No text in slides | `extract_pptx` returns empty list; `st.error` shown |
+| Unsupported file type | Blocked by `st.file_uploader` type filter |
+| No extractable text | Parser returns empty list; `st.error` shown |
+| Password-protected file | Parser raises exception; caught and shown as error |
+| Image-only PDF | `page.extract_text()` returns empty; section skipped silently |
 | AI returns malformed JSON | `json.JSONDecodeError` caught; retry prompt shown |
 | API HTTP error | `requests.HTTPError` caught; error message shown |
-| API timeout | `requests.Timeout` caught via general `Exception`; error shown |
-| Explanation generation fails | Silently returns `{}`; quiz results still display without explanations |
+| API timeout | Caught via general `Exception`; error shown |
+| Explanation generation fails | Silently returns `{}`; results still display |
 
 ---
 
-## 9. Security Considerations
+## 10. Security Considerations
 
-- **API key storage:** Loaded from `.env` via `python-dotenv`; excluded from git via `.gitignore`.
-- **No persistent storage:** All data lives in `st.session_state` (server-side Python dict, cleared on session end).
-- **No user authentication:** Acceptable for local single-user deployment; would require auth layer for multi-user deployment.
-- **Input validation:** File type and size validated before any processing occurs.
-- **Prompt injection:** Slide text is embedded in prompts. No mitigation currently in place; acceptable given the controlled academic context.
+- **API key:** Loaded from `.env` via `python-dotenv`; excluded from git via `.gitignore`.
+- **No persistent storage:** All data in `st.session_state` (cleared on session end).
+- **Input validation:** File type enforced by `st.file_uploader`; size validated before parsing.
+- **No authentication:** Acceptable for local single-user deployment.
+- **Prompt injection:** Slide text is embedded in prompts; acceptable in controlled academic context.
 
 ---
 
-## 10. Known Limitations
+## 11. Known Limitations
 
 | Limitation | Impact | Mitigation |
 |---|---|---|
-| Image-only slides produce no text | Questions cannot be generated from visual-only content | Inform user via word count display |
+| Image-only PDFs produce no text | Questions cannot be generated | Error message + word count shows 0 |
+| Scanned DOCX (no embedded text) | Same as above | Same |
+| Password-protected files fail | Parser raises exception | Caught and shown as clear error |
 | Session history lost on server restart | Analytics/history cleared | Acceptable for single-session use |
-| Full page rerender on every interaction | Minor visual flicker on button clicks | Render key pattern minimises unnecessary rerenders |
-| AI JSON output not schema-validated | Malformed responses surface as errors | Error message + retry; could add Pydantic validation |
-| No question deduplication | Rare repeat questions on small decks | Acceptable; prompt instructs unique questions |
+| Large PDFs (100+ pages) may be slow | Prompt can exceed token limits | Prompt truncation could be added |
+| AI JSON output not schema-validated | Malformed responses surface as errors | Could add Pydantic validation |
 
 ---
 
-## 11. Deployment Notes
+## 12. Deployment Notes
 
 The application is designed for **local development use**. To deploy on a server:
 
 1. Set `OPENROUTER_API_KEY` as an environment variable (not via `.env`).
-2. Run with `streamlit run app.py --server.port 8501 --server.address 0.0.0.0`.
-3. Consider adding Streamlit's built-in authentication or placing behind a reverse proxy with auth for multi-user environments.
-4. Increase `--server.maxUploadSize` if files larger than 25 MB are needed.
+2. Run: `streamlit run app.py --server.port 8501 --server.address 0.0.0.0`
+3. Add `--server.maxUploadSize 25` to enforce the 25 MB limit at the Streamlit level.
+4. Consider placing behind a reverse proxy with authentication for multi-user environments.

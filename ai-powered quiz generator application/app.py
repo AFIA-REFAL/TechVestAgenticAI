@@ -1,7 +1,14 @@
 import os, json, re, time, requests, streamlit as st
 from pptx import Presentation
+from docx import Document
+from pypdf import PdfReader
 from dotenv import load_dotenv
 from io import BytesIO
+
+FILE_ICONS = {
+    "pptx": "📊", "pdf": "📕", "docx": "📝", "txt": "📄",
+}
+SUPPORTED_TYPES = ["pptx", "pdf", "docx", "txt"]
 
 load_dotenv()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -724,6 +731,44 @@ def extract_pptx(b):
         if c: slides.append({"slide":i,"text":c}); words += len(c.split())
     return slides, words
 
+def extract_pdf(b):
+    reader = PdfReader(BytesIO(b)); slides, words = [], 0
+    for i, page in enumerate(reader.pages, 1):
+        c = (page.extract_text() or "").strip()
+        if c: slides.append({"slide":i,"text":c}); words += len(c.split())
+    return slides, words
+
+def extract_docx(b):
+    doc = Document(BytesIO(b)); slides, words = [], 0
+    chunk, idx = [], 1
+    for para in doc.paragraphs:
+        t = para.text.strip()
+        if t: chunk.append(t)
+        if len(chunk) >= 12:
+            c = " ".join(chunk)
+            slides.append({"slide":idx,"text":c}); words += len(c.split())
+            chunk = []; idx += 1
+    if chunk:
+        c = " ".join(chunk)
+        slides.append({"slide":idx,"text":c}); words += len(c.split())
+    return slides, words
+
+def extract_txt(b):
+    text = b.decode("utf-8", errors="ignore").split()
+    slides, words = [], len(text)
+    for i, start in enumerate(range(0, len(text), 250), 1):
+        c = " ".join(text[start:start+250])
+        if c: slides.append({"slide":i,"text":c})
+    return slides, words
+
+def extract_file(b, filename):
+    ext = filename.rsplit(".", 1)[-1].lower()
+    if ext == "pptx": return extract_pptx(b)
+    if ext == "pdf":  return extract_pdf(b)
+    if ext == "docx": return extract_docx(b)
+    if ext == "txt":  return extract_txt(b)
+    raise ValueError(f"Unsupported file type: .{ext}")
+
 def llm(prompt):
     r = requests.post(OPENROUTER_URL,
         headers={"Authorization":f"Bearer {OPENROUTER_API_KEY}","Content-Type":"application/json","HTTP-Referer":"http://localhost:8501","X-Title":"AI Quiz Generator"},
@@ -732,8 +777,8 @@ def llm(prompt):
     return r.json()["choices"][0]["message"]["content"]
 
 def gen_mcqs(slides, n, diff):
-    txt = "\n\n".join(f"[Slide {s['slide']}]: {s['text']}" for s in slides)
-    raw = llm(f"Expert quiz designer. Generate exactly {n} MCQs.\nDIFFICULTY: {diff} — {DIFF_PROMPTS[diff]}\nSLIDES:\n{txt}\nReturn ONLY valid JSON array, no markdown:\n[{{\"id\":1,\"question\":\"...\",\"options\":{{\"A\":\"...\",\"B\":\"...\",\"C\":\"...\",\"D\":\"...\"}},\"correct\":\"B\",\"topic\":\"label\"}}]")
+    txt = "\n\n".join(f"[Section {s['slide']}]: {s['text']}" for s in slides)
+    raw = llm(f"Expert quiz designer. Generate exactly {n} MCQs.\nDIFFICULTY: {diff} — {DIFF_PROMPTS[diff]}\nCONTENT:\n{txt}\nReturn ONLY valid JSON array, no markdown:\n[{{\"id\":1,\"question\":\"...\",\"options\":{{\"A\":\"...\",\"B\":\"...\",\"C\":\"...\",\"D\":\"...\"}},\"correct\":\"B\",\"topic\":\"label\"}}]")
     return json.loads(re.sub(r"```(?:json)?","",raw).strip().strip("`").strip())
 
 def gen_exp(questions, answers):
@@ -863,7 +908,7 @@ with main_col:
             <div class="setting-row"><div><div class="sr-label">AI Model</div><div class="sr-sub">Language model used for generation</div></div><span class="sr-val">claude-haiku-4-5</span></div>
             <div class="setting-row"><div><div class="sr-label">Provider</div><div class="sr-sub">API routing service</div></div><span class="sr-val">OpenRouter</span></div>
             <div class="setting-row"><div><div class="sr-label">Max Questions</div><div class="sr-sub">Maximum per quiz session</div></div><span class="sr-val">30</span></div>
-            <div class="setting-row"><div><div class="sr-label">File Types</div><div class="sr-sub">Supported upload formats</div></div><span class="sr-val">.pptx</span></div>
+            <div class="setting-row"><div><div class="sr-label">File Types</div><div class="sr-sub">Supported upload formats</div></div><span class="sr-val">.pptx .pdf .docx .txt</span></div>
             <div class="setting-row"><div><div class="sr-label">Max File Size</div><div class="sr-sub">Upload limit</div></div><span class="sr-val">25 MB</span></div>
             <div class="setting-row"><div><div class="sr-label">AI Explanations</div><div class="sr-sub">Generated for wrong answers</div></div><span class="sr-val">Enabled</span></div>
             """, unsafe_allow_html=True)
@@ -879,27 +924,35 @@ with main_col:
             <div class="glass-panel">
               <div class="screen-head">
                 <span class="eyebrow">Step 1 of 3</span>
-                <h2>Upload Your Presentation</h2>
-                <p>Import a .pptx file — AI will extract every slide, parse all text, and generate smart questions from your content.</p>
+                <h2>Upload Your Document</h2>
+                <p>Import any document — AI will extract the content and generate smart questions from it.</p>
               </div>
               <div class="upload-zone">
                 <div class="upload-icon-wrap">📤</div>
-                <h3>Drag & drop your .pptx here</h3>
-                <p>Drop your file anywhere on this card, or use the button below</p>
-                <span class="constraint">📎 Supported: .pptx &nbsp;·&nbsp; Max size: 25 MB</span>
+                <h3>Drag & drop your file here</h3>
+                <p>Supports PowerPoint, PDF, Word, and plain text files</p>
+                <div style="display:flex;justify-content:center;gap:8px;margin-top:14px;flex-wrap:wrap">
+                  <span class="constraint">📊 .pptx</span>
+                  <span class="constraint">📕 .pdf</span>
+                  <span class="constraint">📝 .docx</span>
+                  <span class="constraint">📄 .txt</span>
+                  <span class="constraint" style="margin-left:8px">Max 25 MB</span>
+                </div>
               </div>
             </div>
             """, unsafe_allow_html=True)
 
-            up = st.file_uploader("Upload PowerPoint", type=["pptx"], label_visibility="collapsed")
+            up = st.file_uploader("Upload Document", type=SUPPORTED_TYPES, label_visibility="collapsed")
 
             if up:
                 if up.size > 25*1024*1024:
                     st.error("File exceeds 25 MB.")
                 else:
-                    # Show AI processing animation
+                    ext = up.name.rsplit(".", 1)[-1].lower()
+                    ext_labels = {"pptx":"slides","pdf":"pages","docx":"sections","txt":"chunks"}
+                    unit = ext_labels.get(ext, "sections")
                     proc_placeholder = st.empty()
-                    stages = ["Extracting slide content…","Analyzing text with AI…","Generating smart questions…"]
+                    stages = [f"Extracting {unit} from {ext.upper()}…", "Analyzing content with AI…", "Generating smart questions…"]
                     for stage_idx, stage_txt in enumerate(stages):
                         done_stages = "".join([f'<div class="proc-step done"><div class="step-dot"></div>{stages[j]}</div>' for j in range(stage_idx)])
                         active_stage = f'<div class="proc-step active"><div class="step-dot"></div>{stage_txt}</div>'
@@ -920,18 +973,19 @@ with main_col:
                         time.sleep(0.8)
 
                     try:
-                        slides, wc = extract_pptx(up.read())
+                        slides, wc = extract_file(up.read(), up.name)
                         proc_placeholder.empty()
                         if not slides:
-                            st.error("No readable text found in this file.")
+                            st.error("No readable text found in this file. Try a file with more text content.")
                         else:
                             st.session_state.update(slides=slides, filename=up.name, slide_count=len(slides), word_count=wc)
+                            icon = FILE_ICONS.get(ext, "📄")
                             st.markdown(f"""
                             <div class="file-card">
-                              <span class="fc-icon">📄</span>
+                              <span class="fc-icon">{icon}</span>
                               <div class="fc-info">
                                 <strong>{up.name}</strong>
-                                <span>{len(slides)} slides extracted &nbsp;·&nbsp; {wc:,} words ready</span>
+                                <span>{len(slides)} {unit} extracted &nbsp;·&nbsp; {wc:,} words ready</span>
                               </div>
                               <span class="fc-badge">✓ READY</span>
                             </div>

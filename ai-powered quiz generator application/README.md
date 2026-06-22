@@ -1,12 +1,12 @@
 # AI Quiz Generator
 
-> Transform any PowerPoint presentation into an interactive AI-powered quiz in seconds.
+> Transform any document — PowerPoint, PDF, Word, or plain text — into an interactive AI-powered quiz in seconds.
 
 ---
 
 ## Overview
 
-AI Quiz Generator is a Streamlit-based web application that accepts a `.pptx` file and uses a large language model to automatically generate multiple-choice questions (MCQs) from the slide content. Users configure the number of questions and difficulty level, take the quiz in a clean one-question-per-screen interface, and receive a detailed results breakdown with AI-generated explanations for every incorrect answer.
+AI Quiz Generator is a Streamlit-based web application that accepts any document file and uses a large language model to automatically generate multiple-choice questions (MCQs) from the content. Users configure the number of questions and difficulty level, take the quiz in a clean one-question-per-screen interface, and receive a detailed results breakdown with AI-generated explanations for every incorrect answer.
 
 ---
 
@@ -14,7 +14,8 @@ AI Quiz Generator is a Streamlit-based web application that accepts a `.pptx` fi
 
 | Feature | Description |
 |---|---|
-| **Smart Question Generation** | Claude Haiku (via OpenRouter) reads slide text and generates contextually accurate MCQs |
+| **Multi-Format Support** | Upload `.pptx`, `.pdf`, `.docx`, or `.txt` files |
+| **Smart Question Generation** | Claude Haiku (via OpenRouter) reads content and generates contextually accurate MCQs |
 | **3 Difficulty Levels** | Simple (recall), Medium (reasoning), Complex (analytical / edge-case) |
 | **5–30 Questions** | Configurable slider — generate as few or as many as needed |
 | **One Question Per Screen** | Distraction-free quiz experience with progress bar and live timer |
@@ -25,13 +26,24 @@ AI Quiz Generator is a Streamlit-based web application that accepts a `.pptx` fi
 
 ---
 
+## Supported File Formats
+
+| Format | Extension | Extraction Method |
+|---|---|---|
+| PowerPoint | `.pptx` | `python-pptx` — extracts text from all shapes across all slides |
+| PDF | `.pdf` | `pypdf` — extracts text from each page |
+| Word Document | `.docx` | `python-docx` — extracts paragraphs, grouped into sections |
+| Plain Text | `.txt` | UTF-8 decode, split into 250-word chunks |
+
+---
+
 ## Screenshots
 
 ```
 Upload → Configure → Quiz → Results
 ```
 
-- **Upload screen** — animated drag-and-drop zone with AI processing animation
+- **Upload screen** — animated drag-and-drop zone accepting all 4 formats, with AI processing animation
 - **Configure screen** — slider + 3-tile difficulty selector
 - **Quiz screen** — single question with A/B/C/D option cards, progress bar, timer
 - **Results screen** — score banner, per-question review, AI feedback bubbles
@@ -44,7 +56,9 @@ Upload → Configure → Quiz → Results
 |---|---|
 | Frontend / UI | Streamlit 1.35+ with custom CSS (glassmorphism dark theme) |
 | AI Model | `anthropic/claude-haiku-4-5` via OpenRouter API |
-| File Parsing | `python-pptx` |
+| PowerPoint Parsing | `python-pptx` |
+| PDF Parsing | `pypdf` |
+| Word Parsing | `python-docx` |
 | HTTP Client | `requests` |
 | Config | `python-dotenv` |
 | Language | Python 3.10+ |
@@ -91,9 +105,9 @@ The app opens automatically at `http://localhost:8501`.
 
 ## Usage
 
-1. **Upload** — Drag and drop a `.pptx` file (max 25 MB) onto the upload zone.
+1. **Upload** — Drag and drop a `.pptx`, `.pdf`, `.docx`, or `.txt` file (max 25 MB) onto the upload zone.
 2. **Configure** — Choose how many questions (5–30) and select a difficulty level.
-3. **Generate** — Click **Generate Questions**. The AI processes slides and builds your quiz (~10–20 seconds).
+3. **Generate** — Click **Generate Questions**. The AI processes the content and builds your quiz (~10–20 seconds).
 4. **Quiz** — Answer each question by clicking an option card. Use **Next** / **Back** to navigate.
 5. **Results** — View your score, review every question, and read AI explanations for missed answers.
 6. **History / Analytics** — Click the sidebar icons to view past sessions and performance stats.
@@ -104,14 +118,12 @@ The app opens automatically at `http://localhost:8501`.
 
 ```
 ai-powered quiz generator application/
-├── app.py              # Main Streamlit application (UI + backend)
-├── requirements.txt    # Python dependencies
-├── .env                # API key (local only, not committed)
-└── README.md           # This file
-
-docs/
-├── SPEC.md             # Product specification
-└── TECHNICAL_DESIGN.md # Technical architecture and design decisions
+├── app.py                  # Main Streamlit application (UI + backend)
+├── requirements.txt        # Python dependencies
+├── .env                    # API key (local only, not committed)
+├── README.md               # This file
+├── SPEC.md                 # Product specification
+└── TECHNICAL_DESIGN.md     # Technical architecture and design decisions
 ```
 
 ---
@@ -121,6 +133,8 @@ docs/
 ```
 streamlit>=1.35.0
 python-pptx>=0.6.23
+pypdf>=4.0.0
+python-docx>=1.1.0
 requests>=2.31.0
 python-dotenv>=1.0.0
 ```
@@ -138,7 +152,7 @@ python-dotenv>=1.0.0
 
 ## Academic Context
 
-This application was developed as a homework assignment for **Academic Year 2025–26** as part of the TechVest Agentic AI program. It demonstrates practical use of large language models for educational tooling, prompt engineering for structured JSON output, and custom UI development on top of a Python web framework.
+This application was developed as a homework assignment for **Academic Year 2025–26** as part of the TechVest Agentic AI program. It demonstrates practical use of large language models for educational tooling, multi-format document parsing, prompt engineering for structured JSON output, and custom UI development on top of a Python web framework.
 
 ---
 
