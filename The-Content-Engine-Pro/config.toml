@@ -1,7 +1,17 @@
 [theme]
 base = "light"
 primaryColor = "#b8860b"
-backgroundColor = "#faf9f6"
-secondaryBackgroundColor = "#f5f0e8"
-textColor = "#3d3a36"
+backgroundColor = "#f6f5f1"
+secondaryBackgroundColor = "#f0ede5"
+textColor = "#2d2a26"
 font = "sans serif"
+
+# Custom fonts loaded via Google Fonts (Inter) in app.py<style>
+</style>
+
+[server]
+maxUploadSize = 10
+runOnSave = true
+
+[browser]
+gatherUsageStats = false
