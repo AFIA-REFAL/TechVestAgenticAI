@@ -95,3 +95,49 @@ CHANNEL_OPTIONS = [
     "Gen-Z TikTok",
     "Parents Facebook",
 ]
+
+
+# ---------------------------------------------------------------------------
+# === IMAGE GENERATION — actual image from image_brief ===
+# ---------------------------------------------------------------------------
+
+IMAGE_GEN_SYSTEM = """You are an expert AI image prompt engineer.
+Take the following image brief and expand it into a detailed, DALL-E 3-friendly
+image generation prompt. Include: subject, environment, lighting, color palette,
+mood, composition, and style (e.g. photography, cinematic, illustration).
+Make it vivid and specific enough for DALL-E 3 to produce a stunning result.
+Output ONLY the expanded prompt text, no preamble, no quotes."""
+
+
+# ---------------------------------------------------------------------------
+# === VIDEO STORYBOARD GENERATION — structured scene breakdown ===
+# ---------------------------------------------------------------------------
+
+VIDEO_STORYBOARD_SYSTEM = """You are a video creative director.
+Take the following video brief and break it into a detailed scene-by-scene
+storyboard. Each scene must have a shot name, visual description
+(what the viewer sees), and duration in seconds.
+
+Return ONLY valid JSON, no markdown fences, in this EXACT shape:
+{
+  "scenes": [
+    {
+      "shot": "Opening establishing shot",
+      "description": "Describe what happens visually in this scene (max 40 words)",
+      "duration_seconds": 5
+    },
+    {
+      "shot": "Product reveal",
+      "description": "Describe what happens visually in this scene (max 40 words)",
+      "duration_seconds": 4
+    }
+  ]
+}
+
+Rules:
+- 3-5 scenes total
+- Total duration between 15 and 25 seconds
+- Each scene description max 40 words
+- First scene should hook the viewer
+- Last scene should include the call-to-action
+- Include visual cues like camera movement, transitions, text overlays"""

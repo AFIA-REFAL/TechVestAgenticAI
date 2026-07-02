@@ -13,10 +13,12 @@ import streamlit as st
 from engine import (
     generate_suite, run_critique_loop,
     generate_voiceover_script, adapt_for_channel,
+    generate_image, generate_video_storyboard,
 )
 from tts import synthesize_voiceover
 from validators import validate_inputs
 from prompts import CHANNEL_OPTIONS
+import base64
 
 st.set_page_config(
     page_title="Content Engine Pro",
@@ -32,16 +34,48 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css');
 
+    :root {
+        --bg: #fbfaf7;
+        --bg-soft: #f4f1ea;
+        --surface: rgba(255, 255, 255, 0.92);
+        --surface-strong: #ffffff;
+        --border: #e8e1d4;
+        --border-strong: #ddd4c1;
+        --text: #27313f;
+        --muted: #6f7a88;
+        --accent: #b88924;
+        --accent-strong: #9f7517;
+        --accent-soft: #f5ebd3;
+        --shadow: 0 16px 40px rgba(36, 46, 62, 0.08);
+    }
+
     * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
 
+    html, body {
+        background: var(--bg);
+        color: var(--text);
+    }
+
     .block-container {
-        padding-top: 1.5rem;
+        padding-top: 1.25rem;
         padding-bottom: 3rem;
-        max-width: 1140px;
+        max-width: 1180px;
+    }
+
+    /* Hide Streamlit's built-in top chrome so the page header starts cleanly */
+    [data-testid="stHeader"],
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    #MainMenu {
+        visibility: hidden !important;
+        display: none !important;
     }
 
     .stApp {
-        background: linear-gradient(135deg, #f6f5f1 0%, #f0ede5 50%, #faf9f6 100%);
+        background:
+            radial-gradient(circle at top left, rgba(184, 137, 36, 0.08), transparent 26%),
+            radial-gradient(circle at top right, rgba(41, 101, 183, 0.05), transparent 24%),
+            linear-gradient(180deg, #fcfbf8 0%, #f6f3ec 100%);
     }
 
     /* ── Typography ── */
@@ -49,15 +83,83 @@ st.markdown("""
         letter-spacing: -0.02em;
         font-weight: 700;
     }
-    h1 {
-        background: linear-gradient(135deg, #2d2a26 30%, #b8860b 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        font-size: 2.2rem !important;
+    h1 { color: var(--text); font-size: 2.1rem !important; }
+    h2 { color: var(--text); font-size: 1.45rem !important; }
+    h3 { color: var(--text); font-size: 1.08rem !important; font-weight: 600; }
+
+    /* ── Override ALL Streamlit default colors to warm palette ── */
+    .stApp, .stApp p, .stApp span, .stApp div, .stApp label {
+        color: var(--text);
     }
-    h2 { color: #2d2a26; font-size: 1.5rem !important; }
-    h3 { color: #3d3a36; font-size: 1.15rem !important; font-weight: 600; }
+
+    .hero-shell {
+        background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(251,248,241,0.9));
+        border: 1px solid rgba(232, 225, 212, 0.95);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        padding: 1.35rem 1.5rem 1.2rem 1.5rem;
+        margin: 0.25rem 0 1.1rem 0;
+    }
+    .hero-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.28rem 0.72rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        border: 1px solid rgba(184, 137, 36, 0.18);
+        color: var(--accent-strong);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-bottom: 0.85rem;
+    }
+    .hero-title {
+        margin: 0;
+        font-size: 2.35rem;
+        line-height: 1.05;
+        font-weight: 800;
+        color: var(--text);
+        letter-spacing: -0.04em;
+    }
+    .hero-subtitle {
+        margin: 0.6rem 0 0 0;
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 0.98rem;
+        line-height: 1.6;
+    }
+    .hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    .hero-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.42rem 0.78rem;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.94);
+        border: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+
+    /* ── Input labels ── */
+    .stTextInput label, .stSelectbox label, .stTextInput label p, .stSelectbox label p {
+        color: #566170 !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* ── Streamlit text written via st.write / st.markdown ── */
+    .stMarkdown, .stMarkdown p, .stMarkdown span, .element-container, .row-widget {
+        color: #3d3a36 !important;
+    }
 
     /* ── Section header with accent line ── */
     .section-header {
@@ -66,41 +168,113 @@ st.markdown("""
         gap: 0.6rem;
         margin: 1.8rem 0 1rem 0;
     }
+    .section-header i {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        border: 1px solid rgba(184, 137, 36, 0.18);
+    }
     .section-header span {
         font-size: 1.2rem;
         font-weight: 700;
-        color: #2d2a26;
+        color: var(--text);
         letter-spacing: -0.01em;
     }
     .section-header .accent-line {
         flex: 1;
         height: 2px;
-        background: linear-gradient(90deg, #b8860b44, transparent);
+        background: linear-gradient(90deg, rgba(184, 137, 36, 0.28), transparent);
         border-radius: 2px;
     }
 
     /* ── Glass card ── */
     .glass-card {
-        background: rgba(255, 255, 255, 0.72);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.6);
-        border-radius: 14px;
-        padding: 1.2rem 1.4rem;
+        background: var(--surface);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 1.15rem 1.25rem;
         margin-bottom: 1rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
-        color: #3d3a36;
+        box-shadow: var(--shadow);
+        color: var(--text);
         line-height: 1.55;
         transition: box-shadow 0.2s ease, transform 0.2s ease;
     }
     .glass-card:hover {
-        box-shadow: 0 6px 20px rgba(0,0,0,0.07), 0 2px 6px rgba(0,0,0,0.04);
+        box-shadow: 0 18px 42px rgba(36, 46, 62, 0.12);
         transform: translateY(-1px);
     }
 
-    .glass-card.dark {
-        background: rgba(45, 42, 38, 0.06);
-        border: 1px solid rgba(45, 42, 38, 0.08);
+    .glass-card.soft {
+        background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(251,248,241,0.98));
+        border: 1px solid rgba(232, 225, 212, 0.95);
+    }
+
+    /* ── Structured run history card ── */
+    .history-card {
+        background: var(--surface);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 1.1rem 1.25rem;
+        margin: 0.6rem 0;
+        box-shadow: var(--shadow);
+    }
+    .history-card .hc-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.8rem;
+        padding-bottom: 0.6rem;
+        border-bottom: 1px solid rgba(232,228,220,0.6);
+    }
+    .history-card .hc-title {
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: var(--text);
+    }
+    .history-card .hc-badge {
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgba(184, 137, 36, 0.14), rgba(184, 137, 36, 0.08));
+        color: var(--accent-strong);
+        border: 1px solid rgba(184, 137, 36, 0.18);
+    }
+    .history-card .hc-row {
+        display: flex;
+        gap: 0.6rem;
+        padding: 0.35rem 0;
+        font-size: 0.85rem;
+        align-items: flex-start;
+    }
+    .history-card .hc-key {
+        font-weight: 600;
+        color: #738091;
+        min-width: 110px;
+        flex-shrink: 0;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .history-card .hc-value {
+        color: var(--text);
+        flex: 1;
+        line-height: 1.5;
+    }
+    .history-card .hc-value.pass {
+        color: #2e7d4f;
+        font-weight: 600;
+    }
+    .history-card .hc-value.fail {
+        color: #c0392b;
+        font-weight: 600;
     }
 
     .asset-label {
@@ -108,7 +282,7 @@ st.markdown("""
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.1em;
-        color: #a8a095;
+        color: #7f8a98;
         margin-bottom: 0.5rem;
         display: flex;
         align-items: center;
@@ -129,19 +303,19 @@ st.markdown("""
         letter-spacing: 0.02em;
     }
     .pill-pass {
-        background: linear-gradient(135deg, #d4edda, #c3e6cb);
-        color: #155724;
-        border: 1px solid #b8daff44;
+        background: linear-gradient(135deg, #e7f6ea, #d7f0de);
+        color: #1f6b3d;
+        border: 1px solid rgba(31, 107, 61, 0.12);
     }
     .pill-fail {
-        background: linear-gradient(135deg, #f8d7da, #f5c6cb);
-        color: #721c24;
-        border: 1px solid #f5c6cb44;
+        background: linear-gradient(135deg, #fdebec, #f9dfe2);
+        color: #9b2f39;
+        border: 1px solid rgba(155, 47, 57, 0.12);
     }
     .pill-warn {
-        background: linear-gradient(135deg, #fff3cd, #ffeaa7);
-        color: #856404;
-        border: 1px solid #ffeaa744;
+        background: linear-gradient(135deg, #fff5dc, #ffefd0);
+        color: #8a640f;
+        border: 1px solid rgba(138, 100, 15, 0.12);
     }
 
     /* ── Stepper / Progress indicator ── */
@@ -151,9 +325,10 @@ st.markdown("""
         gap: 0;
         margin: 1.5rem 0 2rem 0;
         padding: 0.75rem 0.5rem;
-        background: rgba(255,255,255,0.5);
-        border-radius: 12px;
-        border: 1px solid rgba(255,255,255,0.8);
+        background: rgba(255,255,255,0.82);
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        box-shadow: 0 10px 28px rgba(36, 46, 62, 0.05);
     }
     .step {
         display: flex;
@@ -163,16 +338,16 @@ st.markdown("""
         border-radius: 8px;
         font-size: 0.78rem;
         font-weight: 500;
-        color: #a8a095;
+        color: #7f8a98;
         transition: all 0.25s ease;
     }
     .step.active {
-        background: linear-gradient(135deg, #b8860b22, #b8860b11);
-        color: #7a5e0a;
+        background: linear-gradient(135deg, rgba(184, 137, 36, 0.16), rgba(184, 137, 36, 0.08));
+        color: var(--accent-strong);
         font-weight: 600;
     }
     .step.completed {
-        color: #2e7d4f;
+        color: #2f7a4b;
     }
     .step .step-num {
         display: inline-flex;
@@ -183,40 +358,40 @@ st.markdown("""
         border-radius: 50%;
         font-size: 0.7rem;
         font-weight: 700;
-        background: #e8e4dc;
-        color: #8a8276;
+        background: #ece7dc;
+        color: #7f8a98;
         flex-shrink: 0;
     }
     .step.active .step-num {
-        background: linear-gradient(135deg, #b8860b, #a0760a);
+        background: linear-gradient(135deg, var(--accent), var(--accent-strong));
         color: #fff;
     }
     .step.completed .step-num {
-        background: #2e7d4f;
+        background: #2f7a4b;
         color: #fff;
     }
     .step-arrow {
-        color: #ddd5c5;
+        color: #c8c0b3;
         font-size: 0.75rem;
         margin: 0 0.25rem;
     }
 
     /* ── Buttons ── */
     .stButton > button, .stFormSubmitButton > button {
-        background: linear-gradient(135deg, #f5f0e8, #ede5d5) !important;
-        color: #5a5347 !important;
-        border: 1px solid #ddd5c5 !important;
-        border-radius: 10px !important;
+        background: linear-gradient(135deg, #ffffff, #f7f2e7) !important;
+        color: #445162 !important;
+        border: 1px solid var(--border-strong) !important;
+        border-radius: 12px !important;
         font-weight: 600 !important;
         font-size: 0.85rem !important;
         transition: all 0.2s ease !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+        box-shadow: 0 6px 18px rgba(36, 46, 62, 0.06) !important;
     }
     .stButton > button:hover, .stFormSubmitButton > button:hover {
-        background: linear-gradient(135deg, #ede5d5, #e5dcc8) !important;
-        border: 1px solid #cfc4ac !important;
-        color: #4a4439 !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+        background: linear-gradient(135deg, #fffdf9, #f3ebdb) !important;
+        border: 1px solid #cfc2a9 !important;
+        color: #2f3947 !important;
+        box-shadow: 0 10px 24px rgba(36, 46, 62, 0.09) !important;
     }
     .stButton > button:active {
         transform: scale(0.98) !important;
@@ -226,97 +401,186 @@ st.markdown("""
     }
 
     .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #b8860b, #a0760a) !important;
+        background: linear-gradient(135deg, var(--accent), var(--accent-strong)) !important;
         color: #fff !important;
         border: none !important;
     }
     .stButton > button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #a0760a, #8a6508) !important;
+        background: linear-gradient(135deg, #c5962e, #91670f) !important;
         color: #fff !important;
     }
 
     /* ── Text inputs ── */
-    .stTextInput input {
-        background: rgba(255, 255, 255, 0.8) !important;
-        border: 1px solid #e0dbd0 !important;
-        color: #3d3a36 !important;
-        border-radius: 10px !important;
+    .stTextInput input, .stTextInput input:focus, .stTextInput input:active {
+        background: rgba(255, 255, 255, 0.94) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text) !important;
+        border-radius: 12px !important;
         padding: 0.6rem 0.8rem !important;
         font-size: 0.9rem !important;
         transition: border 0.2s ease, box-shadow 0.2s ease !important;
+        caret-color: var(--accent) !important;
     }
     .stTextInput input:focus {
-        border: 1px solid #b8860b !important;
-        box-shadow: 0 0 0 3px #b8860b22 !important;
+        border: 1px solid var(--accent) !important;
+        box-shadow: 0 0 0 3px rgba(184, 137, 36, 0.14) !important;
     }
     .stTextInput input::placeholder {
-        color: #c4beb0 !important;
+        color: #aab3bf !important;
         font-weight: 400;
     }
+    /* Ensure the text input container and value text are warm */
+    .stTextInput div[data-baseweb="input"] {
+        background: transparent !important;
+    }
+    .stTextInput div[data-baseweb="input"] > div {
+        color: #2d2a26 !important;
+        background: transparent !important;
+    }
 
-    /* ── Selectbox ── */
+    /* ── Choice controls (tone field) ── */
+    .stRadio [role="radiogroup"] {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding-top: 0.15rem;
+    }
+    .stRadio [role="radiogroup"] label {
+        background: #ffffff !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 999px !important;
+        padding: 0.45rem 0.75rem !important;
+        box-shadow: 0 4px 14px rgba(36, 46, 62, 0.04) !important;
+        transition: all 0.18s ease !important;
+    }
+    .stRadio [role="radiogroup"] label:hover {
+        border-color: rgba(184, 137, 36, 0.42) !important;
+        background: #fffdf9 !important;
+        transform: translateY(-1px);
+    }
+    .stRadio [role="radiogroup"] label:has(input:checked) {
+        background: linear-gradient(135deg, rgba(184, 137, 36, 0.16), rgba(184, 137, 36, 0.08)) !important;
+        border-color: rgba(184, 137, 36, 0.4) !important;
+    }
+    .stRadio [role="radiogroup"] label p,
+    .stRadio [role="radiogroup"] label span {
+        color: var(--text) !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+    }
+
     div[data-baseweb="select"] > div {
-        background: rgba(255, 255, 255, 0.8) !important;
-        border: 1px solid #e0dbd0 !important;
-        border-radius: 10px !important;
-        color: #3d3a36 !important;
+        background: #ffffff !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 12px !important;
+        color: var(--text) !important;
         transition: border 0.2s ease !important;
+        min-height: 42px !important;
     }
     div[data-baseweb="select"]:hover > div {
-        border-color: #cfc4ac !important;
+        border-color: #cfc2a9 !important;
+    }
+    /* Selectbox selected value text */
+    div[data-baseweb="select"] span, 
+    div[data-baseweb="select"] div[role="button"] {
+        color: var(--text) !important;
+    }
+    /* Selectbox single-value (displayed selected text) */
+    div[data-baseweb="select"] div[data-testid="stMarkdownContainer"] *,
+    div[data-baseweb="select"] [class*="singleValue"] {
+        color: var(--text) !important;
+    }
+    /* Selectbox dropdown arrow */
+    div[data-baseweb="select"] svg {
+        color: #7f8a98 !important;
+        fill: #7f8a98 !important;
+    }
+    /* Popover listbox container - LIGHTER & CLEANER */
+    div[data-baseweb="popover"] {
+        background: transparent !important;
     }
     div[data-baseweb="popover"] div[role="listbox"],
     div[data-baseweb="popover"] ul[role="listbox"] {
-        background: rgba(255, 255, 255, 0.98) !important;
-        backdrop-filter: blur(10px) !important;
-        border: 1px solid #e8e4dc !important;
-        border-radius: 10px !important;
-        box-shadow: 0 8px 30px rgba(0,0,0,0.08) !important;
+        background: #ffffff !important;
+        backdrop-filter: none !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 12px !important;
+        box-shadow: 0 12px 30px rgba(36, 46, 62, 0.1) !important;
+        padding: 4px !important;
     }
+    /* All text inside select popover */
+    div[data-baseweb="popover"] * {
+        color: var(--text) !important;
+    }
+    /* Option items - CLEAN WHITE */
     div[data-baseweb="popover"] li[role="option"],
     div[data-baseweb="popover"] div[role="option"] {
-        background: transparent !important;
-        color: #3d3a36 !important;
-        padding: 0.5rem 0.8rem !important;
+        background: #ffffff !important;
+        padding: 0.6rem 0.8rem !important;
+        border-radius: 6px !important;
+        color: var(--text) !important;
+        font-size: 0.85rem !important;
+        margin: 1px 0 !important;
+        transition: background 0.1s ease !important;
     }
     div[data-baseweb="popover"] li[role="option"]:hover,
-    div[data-baseweb="popover"] div[role="option"]:hover,
+    div[data-baseweb="popover"] div[role="option"]:hover {
+        background: #f6efe0 !important;
+    }
+    /* Active/highlighted option */
     div[data-baseweb="popover"] li[aria-selected="true"],
     div[data-baseweb="popover"] div[aria-selected="true"] {
-        background: #f5f0e8 !important;
+        background: #f2ead8 !important;
+        font-weight: 600 !important;
+        color: var(--text) !important;
+    }
+    /* Already-selected option indicator */
+    div[data-baseweb="select"] [aria-selected="true"] {
+        color: #2d2a26 !important;
+        font-weight: 600;
+    }
+    /* Ensure the select container text inherits warm color */
+    .stSelectbox label, .stSelectbox label p {
+        color: #566170 !important;
+    }
+    /* Remove any dark overlay or backdrop */
+    div[data-baseweb="popover"]::before,
+    div[data-baseweb="popover"]::after {
+        display: none !important;
+        background: transparent !important;
     }
 
     /* ── Expander ── */
     [data-testid="stExpander"] details {
-        background: rgba(255, 255, 255, 0.6) !important;
+        background: rgba(255, 255, 255, 0.88) !important;
         backdrop-filter: blur(6px) !important;
-        border: 1px solid rgba(232, 228, 220, 0.8) !important;
-        border-radius: 12px !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 14px !important;
         overflow: hidden;
         transition: all 0.2s ease;
     }
     [data-testid="stExpander"] summary {
-        background: rgba(255, 255, 255, 0.5) !important;
+        background: rgba(255, 255, 255, 0.84) !important;
         padding: 0.7rem 1rem !important;
-        border-radius: 12px !important;
-        color: #3d3a36 !important;
+        border-radius: 14px !important;
+        color: var(--text) !important;
         font-weight: 600 !important;
         font-size: 0.85rem !important;
         transition: background 0.2s ease;
     }
     [data-testid="stExpander"] summary:hover {
-        background: rgba(250, 247, 241, 0.8) !important;
+        background: rgba(247, 242, 232, 0.9) !important;
     }
     [data-testid="stExpander"] summary span,
     [data-testid="stExpander"] summary p,
     [data-testid="stExpander"] summary svg {
-        color: #3d3a36 !important;
-        fill: #3d3a36 !important;
+        color: var(--text) !important;
+        fill: var(--text) !important;
     }
     [data-testid="stExpanderDetails"] {
         background: transparent !important;
         padding: 0.5rem 1rem 1rem 1rem !important;
-        color: #3d3a36 !important;
+        color: var(--text) !important;
     }
 
     /* ── Sucess / Error / Warning alerts ── */
@@ -340,18 +604,18 @@ st.markdown("""
     hr {
         border: none !important;
         height: 1px !important;
-        background: linear-gradient(90deg, transparent, #e8e4dc, transparent) !important;
+        background: linear-gradient(90deg, transparent, #e4dccf, transparent) !important;
         margin: 2rem 0 !important;
     }
 
     /* ── Pre / Code block ── */
     pre {
-        background: rgba(251, 250, 247, 0.8) !important;
+        background: rgba(255, 255, 255, 0.92) !important;
         backdrop-filter: blur(4px);
-        border: 1px solid #e8e4dc !important;
-        border-radius: 10px !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 12px !important;
         padding: 1rem 1.2rem !important;
-        color: #3d3a36 !important;
+        color: var(--text) !important;
         font-size: 0.82rem !important;
         overflow-x: auto !important;
         line-height: 1.6;
@@ -359,18 +623,18 @@ st.markdown("""
 
     /* ── Download button ── */
     .stDownloadButton > button {
-        background: linear-gradient(135deg, #f5f0e8, #ede5d5) !important;
-        border: 1px solid #ddd5c5 !important;
-        border-radius: 10px !important;
-        color: #5a5347 !important;
+        background: linear-gradient(135deg, #ffffff, #f7f2e7) !important;
+        border: 1px solid var(--border-strong) !important;
+        border-radius: 12px !important;
+        color: #445162 !important;
         font-weight: 600 !important;
         transition: all 0.2s ease !important;
         width: 100% !important;
     }
     .stDownloadButton > button:hover {
-        background: linear-gradient(135deg, #ede5d5, #e5dcc8) !important;
-        border-color: #cfc4ac !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+        background: linear-gradient(135deg, #fffdf9, #f3ebdb) !important;
+        border-color: #cfc2a9 !important;
+        box-shadow: 0 10px 24px rgba(36, 46, 62, 0.09) !important;
     }
 
     /* ── Status dots ── */
@@ -383,7 +647,7 @@ st.markdown("""
     }
     .status-dot.green { background: #2e7d4f; box-shadow: 0 0 6px #2e7d4f44; }
     .status-dot.red { background: #c0392b; box-shadow: 0 0 6px #c0392b44; }
-    .status-dot.amber { background: #b8860b; box-shadow: 0 0 6px #b8860b44; }
+    .status-dot.amber { background: var(--accent); box-shadow: 0 0 6px rgba(184,137,36,0.24); }
 
     /* ── Before/After comparison ── */
     .compare-container {
@@ -396,13 +660,16 @@ st.markdown("""
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: #a8a095;
+        color: #7f8a98;
         margin-bottom: 0.4rem;
     }
 
     /* ── Spinner override ── */
     .stSpinner > div {
-        border-top-color: #b8860b !important;
+        border-top-color: var(--accent) !important;
+    }
+    .stSpinner {
+        color: #445162 !important;
     }
 
     /* ── Metric cards ── */
@@ -413,24 +680,30 @@ st.markdown("""
     }
     .metric-item {
         flex: 1;
-        background: rgba(255,255,255,0.5);
-        border: 1px solid rgba(232,228,220,0.6);
-        border-radius: 10px;
+        background: rgba(255,255,255,0.92);
+        border: 1px solid var(--border);
+        border-radius: 14px;
         padding: 0.6rem 0.9rem;
         text-align: center;
+        box-shadow: 0 8px 20px rgba(36, 46, 62, 0.05);
     }
     .metric-item .metric-value {
         font-size: 1.1rem;
         font-weight: 700;
-        color: #2d2a26;
+        color: var(--text);
     }
     .metric-item .metric-label {
         font-size: 0.65rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: #a8a095;
+        color: #7f8a98;
         margin-top: 0.15rem;
+    }
+
+    /* ── Caption ── */
+    [data-testid="stCaptionContainer"] {
+        color: #7f8a98 !important;
     }
 
     /* ── Responsive tweaks ── */
@@ -439,6 +712,7 @@ st.markdown("""
         .stepper { flex-wrap: wrap; gap: 0.25rem; }
         .step { padding: 0.3rem 0.6rem; font-size: 0.7rem; }
         .step-arrow { display: none; }
+        .history-card .hc-header { flex-direction: column; align-items: flex-start; gap: 0.3rem; }
     }
 
     /* ── Channel badge ── */
@@ -447,12 +721,12 @@ st.markdown("""
         align-items: center;
         gap: 0.4rem;
         padding: 0.3rem 0.8rem;
-        background: linear-gradient(135deg, #b8860b22, #b8860b11);
-        border: 1px solid #b8860b33;
+        background: linear-gradient(135deg, rgba(184, 137, 36, 0.12), rgba(184, 137, 36, 0.06));
+        border: 1px solid rgba(184, 137, 36, 0.18);
         border-radius: 999px;
         font-size: 0.75rem;
         font-weight: 600;
-        color: #7a5e0a;
+        color: var(--accent-strong);
         margin-bottom: 0.5rem;
     }
 
@@ -470,21 +744,24 @@ st.markdown("""
 # ---------------------------------------------------------------------------
 # Header
 # ---------------------------------------------------------------------------
-col_logo, col_title = st.columns([0.08, 0.92])
-with col_logo:
-    st.markdown("""
-        <div style="
-            width: 42px; height: 42px; background: linear-gradient(135deg, #b8860b, #a0760a);
-            border-radius: 12px; display: flex; align-items: center; justify-content: center;
-            font-size: 1.3rem; box-shadow: 0 4px 12px rgba(184,134,11,0.3);
-        ">🛠️</div>
-    """, unsafe_allow_html=True)
-with col_title:
-    st.markdown("**Content Engine Pro**  <span style='color:#a8a095; font-weight:400; font-size:0.9rem;'>— GenAI campaign pipeline</span>", unsafe_allow_html=True)
-
-st.caption(
-    "Generate suite → self-critique loop → voiceover → multi-channel adaptation. "
-    "Homework — GenAI & Agentic AI Engineering."
+st.markdown(
+    """
+    <div class="hero-shell fade-in">
+        <div class="hero-kicker"><i class="fas fa-sparkles"></i> Content Strategy Studio</div>
+        <h1 class="hero-title">Content Engine Pro</h1>
+        <p class="hero-subtitle">Generate a campaign suite, refine it through self-critique, create a voiceover script, and adapt everything for each channel in one polished workflow.</p>
+        <div class="hero-meta">
+            <span class="hero-pill"><i class="fas fa-wand-magic-sparkles"></i> Suite generation</span>
+            <span class="hero-pill"><i class="fas fa-brain"></i> Free LLM (Phi-3.5/Zephyr/Mistral)</span>
+            <span class="hero-pill"><i class="fas fa-shield-halved"></i> Self-critique loop</span>
+            <span class="hero-pill"><i class="fas fa-image"></i> Image generation</span>
+            <span class="hero-pill"><i class="fas fa-video"></i> Video storyboard</span>
+            <span class="hero-pill"><i class="fas fa-microphone-lines"></i> Voiceover ready</span>
+            <span class="hero-pill"><i class="fas fa-bullhorn"></i> Channel adaptation</span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 # ---------------------------------------------------------------------------
@@ -552,16 +829,19 @@ st.markdown("""
 with st.form("brief_form"):
     st.markdown('<div class="glass-card fade-in">', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
+    tone_options = ["Executive", "Professional", "Conversational", "Bold", "Playful", "Minimal"]
     with col1:
         product_name = st.text_input(
             "🏷️ Product name",
             placeholder="e.g. Aurora Smart Lamp",
             help="Enter the name of your product or service"
         )
-        tone = st.selectbox(
-            "🎨 Tone",
-            ["Playful", "Professional", "Bold", "Warm", "Minimal"],
-            help="Select the campaign's voice and personality"
+        tone = st.radio(
+            "🎨 Tone of voice",
+            tone_options,
+            index=1,
+            horizontal=True,
+            help="Choose the voice and personality for the campaign"
         )
     with col2:
         audience = st.text_input(
@@ -705,6 +985,100 @@ if suite:
         )
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # ---------------------------------------------------------------------------
+    # === IMAGE & VIDEO GENERATION — actual visual output ===
+    # ---------------------------------------------------------------------------
+
+    st.markdown("""
+        <div class="section-header fade-in">
+            <span><i class="fas fa-palette" style="color:#b8860b;"></i> Visual Media Generation</span>
+            <div class="accent-line"></div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    img_col, vid_col = st.columns(2)
+
+    # ---- Image Generation ----
+    with img_col:
+        st.markdown(
+            f'<div class="glass-card soft">'
+            f'<div class="asset-label"><i class="fas fa-image"></i> Generate Campaign Image</div>'
+            f'<p style="font-size:0.85rem;color:#6f7a88;margin-bottom:0.8rem;">'
+            f'Create an actual AI-generated image from the image brief using Pollinations.ai (free, no API key).</p>',
+            unsafe_allow_html=True
+        )
+
+        if "generated_image" not in st.session_state:
+            st.session_state.generated_image = None
+
+        if st.button("🎨 Generate Image", key="gen_image_btn", use_container_width=True):
+            with st.spinner("🖼️ Generating image via AI (free, no API key needed)..."):
+                img_bytes = generate_image(suite["image_brief"])
+                if img_bytes:
+                    st.session_state.generated_image = img_bytes
+                    st.success("✅ Image generated successfully!")
+                else:
+                    st.session_state.generated_image = None
+            st.rerun()
+
+        if st.session_state.generated_image:
+            st.image(
+                st.session_state.generated_image,
+                caption=f'AI-generated campaign visual for {suite["product_name"]}',
+                use_container_width=True,
+            )
+            st.download_button(
+                "⬇️ Download PNG",
+                data=st.session_state.generated_image,
+                file_name=f"{suite['product_name'].replace(' ', '_').lower()}_campaign_image.png",
+                mime="image/png",
+                use_container_width=True,
+            )
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ---- Video Storyboard ----
+    with vid_col:
+        st.markdown(
+            f'<div class="glass-card soft">'
+            f'<div class="asset-label"><i class="fas fa-video"></i> Generate Video Storyboard</div>'
+            f'<p style="font-size:0.85rem;color:#6f7a88;margin-bottom:0.8rem;">'
+            f'Create an animated HTML5 storyboard from the video brief with scene breakdown.</p>',
+            unsafe_allow_html=True
+        )
+
+        if "video_storyboard_html" not in st.session_state:
+            st.session_state.video_storyboard_html = None
+
+        if st.button("🎬 Generate Storyboard", key="gen_video_btn", use_container_width=True):
+            with st.spinner("🎞️ Generating video storyboard..."):
+                storyboard_html = generate_video_storyboard(suite["video_brief"])
+                st.session_state.video_storyboard_html = storyboard_html
+                st.success("✅ Video storyboard generated!")
+            st.rerun()
+
+        if st.session_state.video_storyboard_html:
+            # Display storyboard HTML in an iframe
+            b64_html = base64.b64encode(
+                st.session_state.video_storyboard_html.encode("utf-8")
+            ).decode("utf-8")
+            
+            st.components.v1.html(
+                st.session_state.video_storyboard_html,
+                height=420,
+                scrolling=False,
+            )
+            
+            st.download_button(
+                "⬇️ Download Storyboard HTML",
+                data=st.session_state.video_storyboard_html,
+                file_name=f"{suite['product_name'].replace(' ', '_').lower()}_storyboard.html",
+                mime="text/html",
+                use_container_width=True,
+            )
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
     st.markdown("""
         <div class="section-header fade-in">
             <span><i class="fas fa-microphone" style="color:#b8860b;"></i> Voiceover</span>
@@ -809,7 +1183,7 @@ if suite:
         )
 
     # ---------------------------------------------------------------------------
-    # Run History
+    # Run History — structured card format
     # ---------------------------------------------------------------------------
     if len(st.session_state.run_history) > 0:
         with st.expander(
@@ -818,26 +1192,40 @@ if suite:
         ):
             for i, run in enumerate(st.session_state.run_history):
                 s = run["suite"]
-                st.markdown(
-                    f'<div class="glass-card" style="margin:0.5rem 0;">'
-                    f'<b>Run {i + 1}: {s["product_name"]}</b> — '
-                    f'<span style="color:#8a8276;">audience:</span> <em>{s["audience"]}</em>, '
-                    f'<span style="color:#8a8276;">tone:</span> <em>{s["tone"]}</em>',
-                    unsafe_allow_html=True,
-                )
+                still_fail = run["still_failing"]
+                status_badge = "✅ All passed" if not still_fail else f"⚠️ {len(still_fail)} issue(s)"
 
-                run_summary = {
-                    "tagline": s["tagline"],
-                    "critic_attempts": len(run["critic_history"]),
-                    "still_failing": run["still_failing"] or "none",
-                }
-                import json as _json
-                pretty = _json.dumps(run_summary, indent=2)
                 st.markdown(
-                    f'<pre style="margin-top:0.6rem;">{pretty}</pre>',
-                    unsafe_allow_html=True,
+                    f'<div class="history-card fade-in">'
+                    f'  <div class="hc-header">'
+                    f'    <div class="hc-title">Run {i + 1}: {s["product_name"]}</div>'
+                    f'    <div class="hc-badge">{status_badge}</div>'
+                    f'  </div>'
+                    f'  <div class="hc-row">'
+                    f'    <div class="hc-key">Audience</div>'
+                    f'    <div class="hc-value">{s["audience"]}</div>'
+                    f'  </div>'
+                    f'  <div class="hc-row">'
+                    f'    <div class="hc-key">Tone</div>'
+                    f'    <div class="hc-value">{s["tone"]}</div>'
+                    f'  </div>'
+                    f'  <div class="hc-row">'
+                    f'    <div class="hc-key">Tagline</div>'
+                    f'    <div class="hc-value">{s["tagline"]}</div>'
+                    f'  </div>'
+                    f'  <div class="hc-row">'
+                    f'    <div class="hc-key">Critique Passes</div>'
+                    f'    <div class="hc-value">{len(run["critic_history"])}</div>'
+                    f'  </div>'
+                    f'  <div class="hc-row">'
+                    f'    <div class="hc-key">Issues</div>'
+                    f'    <div class="hc-value {"pass" if not still_fail else "fail"}">'
+                    f'      {still_fail if still_fail else "No remaining issues"}'
+                    f'    </div>'
+                    f'  </div>'
+                    f'</div>',
+                    unsafe_allow_html=True
                 )
-                st.markdown("</div>", unsafe_allow_html=True)
 
     # Pipeline step reset when no suite is active
     else:
