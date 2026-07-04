@@ -1,0 +1,56 @@
+{
+  "test_script": "5-turn coreference resolution",
+  "pass_criteria": {
+    "turn_2": "Answers about CSE (the first in the list)",
+    "turn_3": "Gives CSE's fee",
+    "turn_5": "Says 'Priya' and 'CSE'"
+  },
+  "all_passed": true,
+  "analysis": [
+    {
+      "turn": 2,
+      "criteria": "Answers about CSE (first branch in list)",
+      "pass": true,
+      "detail": "Answer mentions CSE/Computer Science: True"
+    },
+    {
+      "turn": 3,
+      "criteria": "Gives CSE's fee",
+      "pass": true,
+      "detail": "Answer mentions CSE + fee information: True"
+    },
+    {
+      "turn": 5,
+      "criteria": "Says 'Priya' and 'CSE'",
+      "pass": true,
+      "detail": "Contains 'Priya': True, Contains 'CSE/CS': True"
+    }
+  ],
+  "conversation": [
+    {
+      "turn": 1,
+      "question": "What B.Tech branches does BVRIT offer?",
+      "answer": "BVRIT Hyderabad offers the following B.Tech branches:\n\n1. Computer Science and Engineering (CSE) - Annual intake of 360 students\n2. Computer Science and Engineering (AI & ML) - Annual intake of 120 students\n3. Electronics and Communication Engineering (ECE) - Annual intake of 120 students\n4. Electrical and Electronics Engineering (EEE) - Annual intake of 60 students\n\nThe total annual intake for these programs is 660 students [Section: 1.4 Core Values]."
+    },
+    {
+      "turn": 2,
+      "question": "Tell me more about the first one.",
+      "answer": "The first B.Tech branch offered by BVRIT Hyderabad is Computer Science and Engineering (CSE). This program has an annual intake of 360 students. It focuses on providing a strong foundation in computer science principles, programming, and software development, preparing students for various roles in the tech industry [Section: 1.4 Core Values]. \n\nIf you would like more information about this program or any other branches, feel free to ask!"
+    },
+    {
+      "turn": 3,
+      "question": "What's the fee for that branch?",
+      "answer": "The fee for the Computer Science and Engineering (CSE) branch at BVRIT Hyderabad is as follows:\n\n- **Annual Tuition Fee**: ₹120,000\n- **Total Tuition for 4 years**: ₹480,000\n\nPlease note that this total does not include additional optional fees such as transport, lab, library, exam, activity fees, and one-time fees. For more details on scholarships or other financial assistance, please contact the admissions office [Section: 1.4 Core Values]."
+    },
+    {
+      "turn": 4,
+      "question": "My name is Priya.",
+      "answer": "Hello Priya! How can I assist you today regarding BVRIT Hyderabad? If you have any questions about programs, admissions, fees, or anything else, feel free to ask!"
+    },
+    {
+      "turn": 5,
+      "question": "What's my name and which branch was I asking about?",
+      "answer": "Your name is Priya, and you were asking about the Computer Science and Engineering (CSE) branch at BVRIT Hyderabad [Section: 1.4 Core Values]."
+    }
+  ]
+}

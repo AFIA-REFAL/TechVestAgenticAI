@@ -43,7 +43,11 @@ logger = logging.getLogger(__name__)
 
 def load_knowledge_base_entries(filepath: str) -> Optional[List[Dict[str, Any]]]:
     """
-    Load the JSON-structured knowledge base entries from a markdown file.
+    Load JSON-structured knowledge base entries from a .md or .json file.
+
+    NOTE: .docx files are binary ZIP archives and MUST NOT be opened with
+    open(..., encoding='utf-8'). This function returns None immediately for
+    .docx files so the caller falls through to docx2txt-based loading.
 
     Returns:
         List[dict] when the file contains a JSON array, otherwise None.
@@ -51,6 +55,10 @@ def load_knowledge_base_entries(filepath: str) -> Optional[List[Dict[str, Any]]]
     path = Path(filepath)
     if not path.exists():
         raise FileNotFoundError(f"Document not found: {filepath}")
+
+    # .docx is a binary format — never try to read it as text
+    if path.suffix.lower() == '.docx':
+        return None
 
     try:
         with open(path, 'r', encoding='utf-8') as f:
@@ -156,8 +164,11 @@ def load_document(filepath: str) -> str:
 def extract_sections(text: str) -> List[Dict[str, str]]:
     """
     Extract section headings and their content from the document.
-    Detects markdown-style headings (##, ###, etc.) and plain text headings.
-
+    Detects:
+    - Markdown-style headings (##, ###, etc.)
+    - Numbered headings from DOCX (e.g., "1. ABOUT BVRIT", "1.1 Vision", "2. DEPARTMENTS")
+    - Plain text heading patterns (e.g., all-caps lines, lines ending with colon)
+    
     Args:
         text: Full document text
 
@@ -169,11 +180,21 @@ def extract_sections(text: str) -> List[Dict[str, str]]:
     current_heading = "General"
     current_content = []
 
-    heading_pattern = re.compile(r'^(#{1,4}\s+|Page:|Page Structure|Content|Lists|Tables|Internal Links)')
-
+    # Match numbered headings like "1. ABOUT", "1.1 Vision", "2. DEPARTMENTS"
+    numbered_heading_re = re.compile(r'^(\d+(?:\.\d+)*)\s+([A-Z][A-Z\s&/]+|[A-Z][a-zA-Z\s&/]+)$')
+    # Match standalone number lines followed by a heading line (DOCX tables often have this pattern)
+    standalone_number_re = re.compile(r'^\d+\.?\d*\s*$')
+    
     for line in lines:
         stripped = line.strip()
-        # Detect headings
+        if not stripped:
+            # If we have content and hit an empty line followed by table data,
+            # don't create a new section — just skip
+            if current_content:
+                current_content.append('')
+            continue
+
+        # Detect markdown-style headings
         if stripped.startswith('## ') or stripped.startswith('### ') or stripped.startswith('#### '):
             if current_content:
                 sections.append({
@@ -182,7 +203,29 @@ def extract_sections(text: str) -> List[Dict[str, str]]:
                 })
                 current_content = []
             current_heading = stripped.lstrip('#').strip()
-        elif stripped.startswith('Page:') and 'BVRIT' in stripped:
+            continue
+
+        # Detect numbered headings (e.g., "1. ABOUT BVRIT", "2.1 Computer Science...")
+        numbered_match = numbered_heading_re.match(stripped)
+        if numbered_match:
+            if current_content:
+                sections.append({
+                    'heading': current_heading,
+                    'content': '\n'.join(current_content).strip()
+                })
+                current_content = []
+            current_heading = stripped
+            continue
+
+        # Detect standalone number line that introduces a section (e.g., just "1." on its own line)
+        if standalone_number_re.match(stripped):
+            # If next non-empty line looks like a heading, skip this line
+            # (it will be handled by the numbered_heading_re on the next iteration)
+            current_content.append(stripped)
+            continue
+
+        # Detect Page: prefix (from scraped pages)
+        if stripped.startswith('Page:') and 'BVRIT' in stripped:
             if current_content:
                 sections.append({
                     'heading': current_heading,
@@ -190,9 +233,36 @@ def extract_sections(text: str) -> List[Dict[str, str]]:
                 })
                 current_content = []
             current_heading = stripped.replace('Page:', '').strip()
-        else:
-            if stripped:
-                current_content.append(stripped)
+            continue
+
+        # Detect section indicators like "NOTICE" all-caps, standalone
+        if (stripped.isupper() and len(stripped) > 3 
+            and not stripped.startswith('http') 
+            and not stripped.startswith('₹')
+            and not any(stripped.startswith(p) for p in ['www.', 'HTTP', 'HTTPS'])
+            and not stripped.startswith('#')):
+            # Check if this is a section header by looking at context
+            if current_content:
+                # Only treat as new section if it looks like a real header
+                section_keywords = ['NOTICE', 'VISION', 'MISSION', 'OVERVIEW', 'INTRODUCTION',
+                                   'DEPARTMENT', 'PROGRAMME', 'PROGRAM', 'FACULTY', 'CONTACT',
+                                   'ADMISSION', 'PLACEMENT', 'CAMPUS', 'FEE', 'SCHOLARSHIP',
+                                   'STUDENT', 'ACCREDITATION', 'RANKING', 'SPORTS', 'HOSTEL',
+                                   'TRANSPORT', 'MEDICAL', 'WELLNESS', 'SERVICE', 'SUPPORT',
+                                   'LABORATORY', 'RESEARCH', 'INTERNSHIP', 'RECRUITER']
+                if any(kw in stripped for kw in section_keywords):
+                    sections.append({
+                        'heading': current_heading,
+                        'content': '\n'.join(current_content).strip()
+                    })
+                    current_content = []
+                    current_heading = stripped
+                    continue
+        
+        # Detect lines that look like section titles (start with capital letter, end without period, 
+        # reasonably short, not a data line)
+        # Add as regular content
+        current_content.append(stripped)
 
     # Add last section
     if current_content:
@@ -201,7 +271,16 @@ def extract_sections(text: str) -> List[Dict[str, str]]:
             'content': '\n'.join(current_content).strip()
         })
 
-    return sections
+    # Post-process: merge very short sections into previous (likely table row headers)
+    merged = []
+    for section in sections:
+        if merged and len(section['content'].strip()) < 20:
+            # This is likely a continuation — merge into previous
+            merged[-1]['content'] += '\n' + section['heading'] + '\n' + section['content']
+        else:
+            merged.append(section)
+
+    return merged
 
 
 def create_chunks_with_metadata(

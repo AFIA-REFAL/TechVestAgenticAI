@@ -1,11 +1,8 @@
-# Task Progress: College FAQ Chatbot - Use BVRITH_Knowledge_Base.md as RAG Source
+# Task: Fix Conversation History / Coreference Resolution
 
-- [x] Analyze existing project structure
-- [x] Understand knowledge base format (JSON array in .md file)
-- [ ] Update `.env` to point to `data/BVRITH_Knowledge_Base.md`
-- [ ] Update `config.py` default document path to `.md` file
-- [ ] Add `load_json_knowledge_base()` to `utils.py`
-- [ ] Update `ingest.py` to handle structured JSON knowledge base
-- [ ] Clear old ChromaDB for fresh re-ingestion
-- [ ] Verify ingestion works end-to-end
-- [ ] Run the app to confirm chatbot functionality
+- [x] Analyze current codebase (app.py, rag.py, prompts)
+- [ ] Fix `rag.py`: Remove truncation of chat_history (change from last 4 to full history)
+- [ ] Update `grounding_prompt.txt`: Add explicit instructions about prior conversation context
+- [ ] Create test script to run the 5-turn test
+- [ ] Run the 5-turn test and record responses
+- [ ] Verify all pass criteria met

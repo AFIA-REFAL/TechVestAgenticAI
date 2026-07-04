@@ -833,6 +833,7 @@ def render_chat():
                         "citations": response.citations,
                         "refused": response.refused,
                         "related_images": len(related_images),
+                        "tool_calls": response.tool_calls,
                     }
                     
                     with st.expander("📋 View Details"):

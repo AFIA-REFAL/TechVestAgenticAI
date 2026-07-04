@@ -91,8 +91,8 @@ class Settings(BaseSettings):
     # Document & Chunking Configuration
     # ============================================================
     document_path: str = Field(
-        default="data/BVRITH_Knowledge_Base.md",
-        description="Path to the college knowledge base document (JSON-structured .md file)",
+        default="data/bvrit_college_info.docx",
+        description="Path to the college knowledge base document (DOCX format with structured college info)",
         validation_alias="DOCUMENT_PATH"
     )
 

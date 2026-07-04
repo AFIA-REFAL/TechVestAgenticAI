@@ -4,10 +4,11 @@ BVRIT Hyderabad College FAQ Chatbot - Complete RAG Pipeline
 Implements the full Retrieval-Augmented Generation pipeline:
 1. Question → Embedding → Vector Search → Relevant Chunks
 2. Chunks + Grounding Prompt → OpenRouter LLM → Generated Answer
-3. Post-processing: Citation extraction, metadata enrichment, timing
+3. Tool calling: for fee calculations, date checking, and percentage computations
+4. Post-processing: Citation extraction, metadata enrichment, timing
 
 Author: Senior GenAI Engineer
-Version: 1.0.0
+Version: 2.0.0
 """
 
 import os
@@ -29,6 +30,7 @@ from utils import (
     estimate_tokens,
 )
 from prompts import get_prompts
+from tools import get_tool_definitions, execute_tool_call
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,7 @@ class RAGResponse:
         model: LLM model used
         embedding_model: Embedding model used
         refused: Whether the answer was refused (no context found)
+        tool_calls: List of tool calls made during generation
     """
     question: str = ""
     answer: str = ""
@@ -63,6 +66,7 @@ class RAGResponse:
     embedding_model: str = ""
     refused: bool = False
     related_images: List[Dict[str, Any]] = field(default_factory=list)
+    tool_calls: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert response to dictionary for serialization."""
@@ -74,7 +78,7 @@ class RAGPipeline:
     Complete Retrieval-Augmented Generation pipeline.
 
     Orchestrates retrieval, prompt formatting, LLM generation,
-    and response post-processing.
+    tool calling, and response post-processing.
     """
 
     def __init__(
@@ -105,6 +109,9 @@ class RAGPipeline:
         # Load prompts
         self.prompts = get_prompts()
 
+        # Load tool definitions
+        self.tool_definitions = get_tool_definitions()
+
         # Configure retriever
         self._setup_retriever()
 
@@ -112,6 +119,7 @@ class RAGPipeline:
             f"RAG Pipeline initialized: "
             f"model={settings.llm_model}, "
             f"top_k={self.top_k}, "
+            f"tools={[t['function']['name'] for t in self.tool_definitions]}, "
             f"filter={section_filter or 'None'}"
         )
 
@@ -128,13 +136,13 @@ class RAGPipeline:
 
     def _standalone_query(self, question: str, chat_history: Optional[List[Dict[str, str]]]) -> str:
         """
-        Rewrite a follow-up question into a standalone query using recent
-        chat history, so retrieval works for things like:
-            Turn 1: "What departments does BVRIT have?"
+        Rewrite a follow-up question into a standalone query using the full
+        conversation history, so retrieval works for things like:
+            Turn 1: "What branches does BVRIT offer?"
             Turn 2: "Tell me more about the first one."
 
-        Without this, "the first one" retrieves nothing relevant and the
-        Context evaluation dimension fails by design.
+        The full history is needed so that "the first one" correctly maps back
+        to the first branch mentioned in Turn 1.
 
         Args:
             question: The raw user question for this turn
@@ -146,10 +154,10 @@ class RAGPipeline:
         if not chat_history:
             return question
 
-        # Only need the last couple of turns for pronoun/reference resolution
-        recent = chat_history[-4:]
+        # Use the FULL history so pronouns and references like "the first one"
+        # can be resolved correctly across multiple turns.
         history_text = "\n".join(
-            f"{turn['role'].capitalize()}: {turn['content']}" for turn in recent
+            f"{turn['role'].capitalize()}: {turn['content']}" for turn in chat_history
         )
 
         rewrite_prompt = (
@@ -157,7 +165,7 @@ class RAGPipeline:
             "rewrite the follow-up as a standalone question that contains "
             "all the context needed to search a knowledge base, without "
             "adding any new facts.\n\n"
-            f"Conversation so far:\n{history_text}\n\n"
+            f"Conversation so far (full history):\n{history_text}\n\n"
             f"Follow-up question: {question}\n\n"
             "Standalone question:"
         )
@@ -229,9 +237,17 @@ class RAGPipeline:
         question: str,
         context: str,
         chat_history: Optional[List[Dict[str, str]]] = None,
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> Tuple[str, Dict[str, Any], List[Dict[str, Any]]]:
         """
-        Generate an answer using the LLM with grounded context.
+        Generate an answer using the LLM with grounded context and tool calling.
+
+        The LLM is given access to three tools:
+        - fee_calculator: compute BVRIT fee totals, hostel, scholarships
+        - date_checker: compare KB dates against today's real-time clock
+        - percentage_calculator: compute placement rates, cutoffs, etc.
+
+        If the LLM calls a tool, the result is fed back to the LLM so it
+        can incorporate the computed data into the final answer.
 
         Args:
             question: User's question
@@ -241,7 +257,7 @@ class RAGPipeline:
                 like "the first one" or "that department"
 
         Returns:
-            Tuple of (generated_answer, token_usage_dict)
+            Tuple of (generated_answer, token_usage_dict, tool_calls_made)
         """
         # Format the grounding prompt
         prompt = self.prompts.format_grounding_prompt(
@@ -250,37 +266,90 @@ class RAGPipeline:
         )
 
         if chat_history:
-            recent = chat_history[-4:]
+            # Use the FULL conversation history so the model can resolve
+            # references like "the first one", "that branch", "my name"
+            # correctly across multiple turns.
             history_text = "\n".join(
-                f"{turn['role'].capitalize()}: {turn['content']}" for turn in recent
+                f"{turn['role'].capitalize()}: {turn['content']}" for turn in chat_history
             )
             prompt = (
-                f"## PRIOR CONVERSATION (for resolving references only — "
+                f"## PRIOR CONVERSATION (use this ONLY to resolve pronouns and "
+                f"references like 'the first one', 'that branch', 'my name' etc. — "
                 f"do not treat as knowledge-base content)\n{history_text}\n\n{prompt}"
             )
 
+        # Aggregate token usage across all rounds
+        total_token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        all_tool_calls = []
+
         try:
-            # Call the LLM
-            response = self.llm.invoke(prompt)
+            # --- Round 1: Send prompt with tool definitions ---
+            llm_with_tools = self.llm.bind_tools(self.tool_definitions)
+            response = llm_with_tools.invoke(prompt)
 
-            # Extract answer
-            answer = response.content.strip()
+            # Accumulate token usage
+            if response.usage_metadata:
+                total_token_usage["prompt_tokens"] += response.usage_metadata.get("input_tokens", 0)
+                total_token_usage["completion_tokens"] += response.usage_metadata.get("output_tokens", 0)
+                total_token_usage["total_tokens"] += (
+                    response.usage_metadata.get("input_tokens", 0)
+                    + response.usage_metadata.get("output_tokens", 0)
+                )
 
-            # Track token usage
-            token_usage = {
-                "prompt_tokens": response.usage_metadata.get("input_tokens", 0)
-                if response.usage_metadata else 0,
-                "completion_tokens": response.usage_metadata.get("output_tokens", 0)
-                if response.usage_metadata else 0,
-                "total_tokens": (
-                    (response.usage_metadata.get("input_tokens", 0) +
-                     response.usage_metadata.get("output_tokens", 0))
-                    if response.usage_metadata else 0
-                ),
-            }
+            # Check if the LLM wants to call a tool
+            if response.tool_calls:
+                messages = [
+                    {"role": "system", "content": prompt},
+                    {"role": "assistant", "content": response.content, "tool_calls": response.tool_calls},
+                ]
+
+                for tool_call in response.tool_calls:
+                    tool_name = tool_call["name"]
+                    # LangChain may return args as a dict or a JSON string
+                    if isinstance(tool_call["args"], dict):
+                        tool_args = tool_call["args"]
+                    else:
+                        tool_args = json.loads(tool_call["args"])
+
+                    # Execute the tool
+                    tool_result = execute_tool_call(tool_name, tool_args)
+                    all_tool_calls.append({
+                        "tool_name": tool_name,
+                        "arguments": tool_args,
+                        "result": tool_result[:500],  # truncate for storage
+                    })
+
+                    # Add tool result to messages
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call["id"],
+                        "content": tool_result,
+                    })
+
+                    logger.info(
+                        f"Tool call executed: {tool_name} -> "
+                        f"{tool_result[:100]}..."
+                    )
+
+                # --- Round 2: Send tool results back to LLM ---
+                final_response = self.llm.invoke(messages)
+                answer = final_response.content.strip()
+
+                # Accumulate token usage for round 2
+                if final_response.usage_metadata:
+                    total_token_usage["prompt_tokens"] += final_response.usage_metadata.get("input_tokens", 0)
+                    total_token_usage["completion_tokens"] += final_response.usage_metadata.get("output_tokens", 0)
+                    total_token_usage["total_tokens"] += (
+                        final_response.usage_metadata.get("input_tokens", 0)
+                        + final_response.usage_metadata.get("output_tokens", 0)
+                    )
+            else:
+                # No tool call — use the direct response
+                answer = response.content.strip()
 
             logger.info(
-                f"Generation complete: {token_usage['total_tokens']} tokens used"
+                f"Generation complete: {total_token_usage['total_tokens']} tokens used, "
+                f"{len(all_tool_calls)} tool call(s) made"
             )
 
         except Exception as e:
@@ -289,9 +358,8 @@ class RAGPipeline:
                 "I apologize, but I encountered an error while generating "
                 "a response. Please try again later."
             )
-            token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
-        return answer, token_usage
+        return answer, total_token_usage, all_tool_calls
 
     def _check_if_refused(self, answer: str, context: str) -> bool:
         """
@@ -328,7 +396,7 @@ class RAGPipeline:
         self, question: str, chat_history: Optional[List[Dict[str, str]]] = None
     ) -> RAGResponse:
         """
-        Complete RAG pipeline: retrieve → generate → post-process.
+        Complete RAG pipeline: retrieve -> generate (with tool calling) -> post-process.
 
         Args:
             question: User's question
@@ -345,8 +413,8 @@ class RAGPipeline:
         # Step 1: Retrieve relevant chunks (query rewritten using history)
         docs, context = self.retrieve(question, chat_history=chat_history)
 
-        # Step 2: Generate answer
-        answer, token_usage = self.generate(question, context, chat_history=chat_history)
+        # Step 2: Generate answer with tool calling support
+        answer, token_usage, tool_calls = self.generate(question, context, chat_history=chat_history)
 
         # Step 3: Post-process
         refused = self._check_if_refused(answer, context)
@@ -382,6 +450,7 @@ class RAGPipeline:
             embedding_model=settings.embedding_model,
             refused=refused,
             related_images=[],
+            tool_calls=tool_calls,
         )
 
         if self.debug:
@@ -393,6 +462,7 @@ class RAGPipeline:
             logger.info(f"Citations: {citations}")
             logger.info(f"Latency: {timer}")
             logger.info(f"Tokens: {token_usage}")
+            logger.info(f"Tool calls: {len(tool_calls)}")
             logger.info(f"Refused: {refused}")
             logger.info(f"{'=' * 60}\n")
 
