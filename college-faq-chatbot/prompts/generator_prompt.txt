@@ -1,0 +1,16 @@
+Based on the following context, provide a comprehensive and accurate answer to the user's question.
+
+Context:
+{context}
+
+Question:
+{question}
+
+Instructions:
+1. Answer ONLY using the context provided above.
+2. If the context doesn't contain the answer, say you couldn't find the information.
+3. Include citations in [Section: Section Name] format for each claim.
+4. Be concise but complete.
+5. If the context has conflicting information, present both sides.
+
+Answer:</write_to_file>
