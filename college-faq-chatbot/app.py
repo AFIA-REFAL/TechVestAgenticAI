@@ -5,6 +5,7 @@ Clean, lite UI matching BVRIT Hyderabad website branding with evaluation dashboa
 import os
 import sys
 import json
+import random
 import logging
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -258,6 +259,19 @@ CUSTOM_CSS = f"""
         color: {BVRIT_MAROON};
     }}
     
+    /* Quick question chips */
+    div[data-testid="column"] .stButton button {{
+        border-radius: 20px !important;
+        border: 1px solid #e5e0d8 !important;
+        background: #fff !important;
+        font-size: 0.78rem !important;
+        padding: 0.5rem 0.5rem !important;
+    }}
+    div[data-testid="column"] .stButton button:hover {{
+        border-color: {BVRIT_MAROON} !important;
+        background: {BVRIT_GOLD}22 !important;
+    }}
+    
     /* Buttons */
     .stButton button {{
         border-radius: 10px !important;
@@ -309,6 +323,8 @@ def init_session_state():
         st.session_state.evaluation_report = None
     if "image_entries" not in st.session_state:
         st.session_state.image_entries = {}
+    if "pending_prompt" not in st.session_state:
+        st.session_state.pending_prompt = None
 
 # ============================================================
 # Initialize Backend
@@ -336,7 +352,7 @@ def render_header():
         <div class="brand-header">
             <img src="{LOGO_URL}" alt="BVRIT Hyderabad Logo">
             <div class="brand-text">
-                <h1>BVRIT Hyderabad</h1>
+                <h1>BVRIT HYDERABAD</h1>
                 <p>College of Engineering for Women · Campus Compass</p>
             </div>
         </div>
@@ -344,58 +360,86 @@ def render_header():
         unsafe_allow_html=True,
     )
 
+BVRIT_FACTS = [
+    "BVRIT HYDERABAD was founded in 2012 as an all-women engineering college.",
+    "The campus has dedicated innovation labs for AI, IoT, and Robotics.",
+    "BVRIT students have consistently bagged top placements in core and IT sectors.",
+    "The college runs active IEEE, ACM, and CSI student chapters.",
+    "BVRIT HYDERABAD is UGC-Autonomous, giving it flexibility in curriculum design.",
+]
+
+QUICK_QUESTIONS = [
+    ("🎓 Admissions", "What is the admission process for BVRIT HYDERABAD?"),
+    ("💰 Fees", "What is the fee structure at BVRIT HYDERABAD?"),
+    ("💼 Placements", "How are placements at BVRIT HYDERABAD?"),
+    ("🏠 Hostel", "Tell me about hostel facilities at BVRIT HYDERABAD."),
+]
+
 # ============================================================
 # Chat Tab
 # ============================================================
 def render_chat_tab():
-    # Chat container with messages
-    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-    
-    if not st.session_state.messages:
-        st.markdown(
-            f"""
-            <div class="welcome-box">
-                <div class="icon">🎓</div>
-                <h2>Welcome to Campus Compass</h2>
-                <p>Ask me anything about BVRIT Hyderabad — admissions, programs, fees, placements, and campus life.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    else:
-        for idx, message in enumerate(st.session_state.messages):
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-                if message["role"] == "assistant" and "metadata" in message:
-                    meta = message["metadata"]
-                    metrics_html = (
-                        f'<span class="mini-metric">⚡ <strong>{meta.get("latency", 0):.1f}s</strong></span>'
-                        f'<span class="mini-metric">📝 <strong>{meta.get("tokens", 0)}</strong> tokens</span>'
-                        f'<span class="mini-metric">📄 <strong>{meta.get("chunks", 0)}</strong> chunks</span>'
-                    )
-                    st.markdown(f'<div style="margin-top:0.3rem;">{metrics_html}</div>', unsafe_allow_html=True)
-                    if meta.get("citations"):
-                        citations_html = "".join(
-                            f'<span class="citation-badge">{c}</span>' for c in meta["citations"]
+    chat_box = st.container(border=True)
+
+    with chat_box:
+        if not st.session_state.messages:
+            fact = random.choice(BVRIT_FACTS)
+            st.markdown(
+                f"""
+                <div class="welcome-box">
+                    <div class="icon">🎓</div>
+                    <h2>Welcome to Campus Compass</h2>
+                    <p>Ask me anything about BVRIT HYDERABAD — admissions, programs, fees, placements, and campus life.</p>
+                    <div style="margin-top:1rem;padding:0.6rem 1rem;background:#fff8ec;
+                                border:1px dashed {BVRIT_GOLD};border-radius:10px;
+                                font-size:0.78rem;color:{BVRIT_MAROON};display:inline-block;">
+                        ✨ <strong>Did you know?</strong> {fact}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            cols = st.columns(len(QUICK_QUESTIONS))
+            for col, (label, question) in zip(cols, QUICK_QUESTIONS):
+                with col:
+                    if st.button(label, use_container_width=True, key=f"chip_{label}"):
+                        st.session_state.pending_prompt = question
+                        st.rerun()
+
+        else:
+            for idx, message in enumerate(st.session_state.messages):
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+                    if message["role"] == "assistant" and "metadata" in message:
+                        meta = message["metadata"]
+                        metrics_html = (
+                            f'<span class="mini-metric">⚡ <strong>{meta.get("latency", 0):.1f}s</strong></span>'
+                            f'<span class="mini-metric">📝 <strong>{meta.get("tokens", 0)}</strong> tokens</span>'
+                            f'<span class="mini-metric">📄 <strong>{meta.get("chunks", 0)}</strong> chunks</span>'
                         )
-                        st.markdown(f'<div style="margin-top:0.2rem;">{citations_html}</div>', unsafe_allow_html=True)
-                    # Show image if stored for this message
-                    img_key = f"assistant_{idx}"
-                    if img_key in st.session_state.image_entries:
-                        entry = st.session_state.image_entries[img_key]
-                        caption = entry["name"]
-                        if entry.get("designation"):
-                            caption += f" — {entry['designation']}"
-                        st.image(entry["image_url"], caption=caption, width=280)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Chat input - ALWAYS visible at bottom
-    prompt = st.chat_input("Ask me anything about BVRIT Hyderabad...")
-    
+                        st.markdown(f'<div style="margin-top:0.3rem;">{metrics_html}</div>', unsafe_allow_html=True)
+                        if meta.get("citations"):
+                            citations_html = "".join(
+                                f'<span class="citation-badge">{c}</span>' for c in meta["citations"]
+                            )
+                            st.markdown(f'<div style="margin-top:0.2rem;">{citations_html}</div>', unsafe_allow_html=True)
+                        img_key = f"assistant_{idx}"
+                        if img_key in st.session_state.image_entries:
+                            entry = st.session_state.image_entries[img_key]
+                            caption = entry["name"]
+                            if entry.get("designation"):
+                                caption += f" — {entry['designation']}"
+                            st.image(entry["image_url"], caption=caption, width=280)
+
+    prompt = st.chat_input("Ask me anything about BVRIT HYDERABAD...")
+    if st.session_state.pending_prompt and not prompt:
+        prompt = st.session_state.pending_prompt
+        st.session_state.pending_prompt = None
+
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
-        
+
         with st.chat_message("assistant"):
             with st.spinner(""):
                 try:
@@ -403,18 +447,18 @@ def render_chat_tab():
                     if rag is None:
                         st.error("Pipeline not initialized.")
                         st.stop()
-                    
+
                     history = [
                         {"role": m["role"], "content": m["content"]}
                         for m in st.session_state.messages[:-1]
                     ]
                     response: RAGResponse = rag.answer(prompt, chat_history=history)
-                    
+
                     st.session_state.query_count += 1
                     st.session_state.total_latency += response.latency_seconds
-                    
+
                     st.markdown(response.answer)
-                    
+
                     metadata = {
                         "latency": response.latency_seconds,
                         "tokens": response.token_usage.get("total_tokens", 0),
@@ -422,38 +466,36 @@ def render_chat_tab():
                         "citations": response.citations,
                         "refused": response.refused,
                     }
-                    
+
                     metrics_html = (
                         f'<span class="mini-metric">⚡ <strong>{response.latency_seconds:.1f}s</strong></span>'
                         f'<span class="mini-metric">📝 <strong>{response.token_usage.get("total_tokens", 0)}</strong> tokens</span>'
                         f'<span class="mini-metric">📄 <strong>{len(response.retrieved_chunks)}</strong> chunks</span>'
                     )
                     st.markdown(f'<div style="margin-top:0.3rem;">{metrics_html}</div>', unsafe_allow_html=True)
-                    
+
                     if response.citations:
                         citations_html = "".join(
                             f'<span class="citation-badge">{c}</span>' for c in response.citations
                         )
                         st.markdown(f'<div style="margin-top:0.2rem;">{citations_html}</div>', unsafe_allow_html=True)
-                    
+
                     st.session_state.messages.append({
                         "role": "assistant",
                         "content": response.answer,
                         "metadata": metadata,
                     })
-                    
-                    # Store image for this assistant message
+
                     img_entry = find_image_for_query(prompt)
                     if img_entry:
                         st.session_state.image_entries[f"assistant_{len(st.session_state.messages) - 1}"] = img_entry
-                        # Also show image immediately in current response
                         caption = img_entry["name"]
                         if img_entry.get("designation"):
                             caption += f" — {img_entry['designation']}"
                         st.image(img_entry["image_url"], caption=caption, width=280)
-                    
+
                     st.rerun()
-                    
+
                 except Exception as e:
                     st.error(f"Error: {e}")
                     logger.error(f"Chat error: {e}", exc_info=True)
@@ -612,7 +654,7 @@ def main():
     st.markdown(
         f"""
         <div class="chat-footer">
-            <strong>BVRIT Hyderabad</strong> · Campus Compass · {st.session_state.query_count} queries answered
+            <strong>BVRIT HYDERABAD College of Engineering for Women</strong> · Campus Compass · {st.session_state.query_count} queries answered
         </div>
         """,
         unsafe_allow_html=True,

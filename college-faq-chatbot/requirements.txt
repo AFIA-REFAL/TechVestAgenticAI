@@ -16,7 +16,7 @@ langchain-chroma==0.2.4
 langchain-text-splitters==0.3.8
 
 # Vector Database
-chromadb==1.10.0
+chromadb==1.5.9
 
 # Embeddings & LLM (via OpenRouter)
 openai==1.80.0
