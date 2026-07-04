@@ -1,0 +1,55 @@
+{
+  "_meta": {
+    "source": "https://bvrithyderabad.edu.in/",
+    "compiled": "2026-07-04",
+    "note": "Image URLs are hotlinked directly from the official BVRIT Hyderabad WordPress site (wp-content/uploads paths). They can go stale if the site reorganizes media. For a production chatbot, consider downloading these once and serving them from your own /images folder instead of hotlinking indefinitely."
+  },
+  "college_logo": {
+    "keywords": ["logo", "college logo", "bvrith logo"],
+    "name": "BVRIT Hyderabad College Logo",
+    "image_url": "https://bvrithyderabad.edu.in/wp-content/uploads/2023/07/bvrit-hyderabad-engineering-women-college-logo-2.jpg",
+    "source_page": "https://bvrithyderabad.edu.in/"
+  },
+  "principal": {
+    "keywords": ["principal", "dr sunitha", "k v n sunitha", "kvn sunitha", "college head"],
+    "name": "Dr. K. V. N. Sunitha",
+    "designation": "Founder Principal, BVRIT Hyderabad",
+    "image_url": "https://bvrithyderabad.edu.in/wp-content/uploads/2025/07/PrincipalCSE.jpg",
+    "source_page": "https://bvrithyderabad.edu.in/principal/"
+  },
+  "chairman": {
+    "keywords": ["chairman", "k v vishnu raju", "vishnu raju"],
+    "name": "Sri K. V. Vishnu Raju",
+    "designation": "Chairman, Sri Vishnu Educational Society",
+    "image_url": "https://bvrithyderabad.edu.in/wp-content/uploads/2025/09/Chairman-Sir.jpg",
+    "source_page": "https://bvrithyderabad.edu.in/management/"
+  },
+  "vice_chairman": {
+    "keywords": ["vice chairman", "ravichandran", "ravichandran rajagopal"],
+    "name": "Sri Ravichandran Rajagopal",
+    "designation": "Vice Chairman, Sri Vishnu Educational Society",
+    "image_url": "https://bvrithyderabad.edu.in/wp-content/uploads/2025/09/VC-Sir.jpg",
+    "source_page": "https://bvrithyderabad.edu.in/management/"
+  },
+  "secretary": {
+    "keywords": ["secretary", "aditya vissam"],
+    "name": "Sri Aditya Vissam",
+    "designation": "Secretary, Sri Vishnu Educational Society",
+    "image_url": "https://bvrithyderabad.edu.in/wp-content/uploads/2025/09/DirectorSir.jpg",
+    "source_page": "https://bvrithyderabad.edu.in/management/"
+  },
+  "joint_secretary": {
+    "keywords": ["joint secretary", "sai sumant", "k sai sumant"],
+    "name": "Sri K. Sai Sumant",
+    "designation": "Joint Secretary, Sri Vishnu Educational Society",
+    "image_url": "https://bvrithyderabad.edu.in/wp-content/uploads/2024/04/Sai-Sumant.jpg",
+    "source_page": "https://bvrithyderabad.edu.in/management/"
+  },
+  "founder_chairman": {
+    "keywords": ["founder chairman", "b v raju", "bv raju", "dr b v raju"],
+    "name": "Late Dr. B. V. Raju",
+    "designation": "Founder Chairman, Sri Vishnu Educational Society (Padma Bhushan)",
+    "image_url": "https://bvrithyderabad.edu.in/wp-content/uploads/2023/05/bv-raju-founder-padmabhushan-srivishnu-education2.webp",
+    "source_page": "https://bvrithyderabad.edu.in/management/"
+  }
+}
