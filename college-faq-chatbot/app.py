@@ -118,17 +118,6 @@ CUSTOM_CSS = f"""
         color: {BVRIT_WHITE} !important;
     }}
     
-    /* Chat Container */
-    .chat-container {{
-        background: {BVRIT_WHITE};
-        border-radius: 16px;
-        border: 1px solid rgba(0,0,0,0.06);
-        box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-        padding: 0.5rem 0;
-        margin-bottom: 0.75rem;
-        min-height: 300px;
-    }}
-    
     /* Messages */
     .stChatMessage {{
         padding: 0.25rem 0.75rem !important;
@@ -379,7 +368,7 @@ QUICK_QUESTIONS = [
 # Chat Tab
 # ============================================================
 def render_chat_tab():
-    chat_box = st.container(border=True)
+    chat_box = st.container(border=False)
 
     with chat_box:
         if not st.session_state.messages:
