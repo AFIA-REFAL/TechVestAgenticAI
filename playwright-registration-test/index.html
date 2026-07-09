@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration Page</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 450px;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e1e1;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+        input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+        input.error {
+            border-color: #e74c3c;
+            box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.2);
+        }
+        input.success {
+            border-color: #2ecc71;
+            box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.2);
+        }
+        .error-message {
+            color: #e74c3c;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+        .error-message.visible {
+            display: block;
+        }
+        .password-strength {
+            height: 4px;
+            margin-top: 8px;
+            border-radius: 2px;
+            background: #e1e1e1;
+            overflow: hidden;
+        }
+        .password-strength-bar {
+            height: 100%;
+            width: 0%;
+            transition: all 0.3s ease;
+            border-radius: 2px;
+        }
+        .password-strength-bar.weak { width: 33%; background: #e74c3c; }
+        .password-strength-bar.medium { width: 66%; background: #f39c12; }
+        .password-strength-bar.strong { width: 100%; background: #2ecc71; }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+            text-align: center;
+            font-weight: 500;
+        }
+        .success-message.visible {
+            display: block;
+        }
+        .form-group-inline {
+            display: flex;
+            gap: 15px;
+        }
+        .form-group-inline .form-group {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Create Account</h2>
+        <form id="registrationForm">
+            <div class="form-group-inline">
+                <div class="form-group">
+                    <label for="firstName">First Name</label>
+                    <input type="text" id="firstName" placeholder="John" required>
+                    <div class="error-message" id="firstNameError">First name is required</div>
+                </div>
+                <div class="form-group">
+                    <label for="lastName">Last Name</label>
+                    <input type="text" id="lastName" placeholder="Doe" required>
+                    <div class="error-message" id="lastNameError">Last name is required</div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" placeholder="you@example.com" required>
+                <div class="error-message" id="emailError">Please enter a valid email</div>
+            </div>
+            <div class="form-group">
+                <label for="phone">Phone Number</label>
+                <input type="tel" id="phone" placeholder="+1 (555) 123-4567">
+                <div class="error-message" id="phoneError">Please enter a valid phone number</div>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Create a strong password" required>
+                <div class="password-strength">
+                    <div class="password-strength-bar" id="passwordStrengthBar"></div>
+                </div>
+                <div class="error-message" id="passwordError">Password must be at least 8 characters</div>
+            </div>
+            <div class="form-group">
+                <label for="confirmPassword">Confirm Password</label>
+                <input type="password" id="confirmPassword" placeholder="Confirm your password" required>
+                <div class="error-message" id="confirmError">Passwords do not match</div>
+            </div>
+            <button type="submit" id="registerBtn">Register</button>
+        </form>
+        <div class="success-message" id="successMessage">
+            Registration successful! 🎉
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('registrationForm');
+        const firstName = document.getElementById('firstName');
+        const lastName = document.getElementById('lastName');
+        const email = document.getElementById('email');
+        const phone = document.getElementById('phone');
+        const password = document.getElementById('password');
+        const confirmPassword = document.getElementById('confirmPassword');
+        const successMessage = document.getElementById('successMessage');
+
+        const fields = [firstName, lastName, email, phone, password, confirmPassword];
+
+        function validateField(field) {
+            const errorEl = document.getElementById(field.id + 'Error');
+            let isValid = true;
+
+            if (field === firstName || field === lastName) {
+                isValid = field.value.trim().length > 0;
+            } else if (field === email) {
+                isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(field.value);
+            } else if (field === phone) {
+                isValid = field.value === '' || /^[\d\s\-\+\(\)]{10,}$/.test(field.value);
+            } else if (field === password) {
+                isValid = field.value.length >= 8;
+            } else if (field === confirmPassword) {
+                isValid = field.value === password.value && field.value.length > 0;
+            }
+
+            if (!isValid && field.value.length > 0) {
+                field.classList.add('error');
+                field.classList.remove('success');
+                if (errorEl) errorEl.classList.add('visible');
+            } else if (isValid && field.value.length > 0) {
+                field.classList.remove('error');
+                field.classList.add('success');
+                if (errorEl) errorEl.classList.remove('visible');
+            } else {
+                field.classList.remove('error', 'success');
+                if (errorEl) errorEl.classList.remove('visible');
+            }
+
+            return isValid || field.value.length === 0;
+        }
+
+        function updatePasswordStrength() {
+            const bar = document.getElementById('passwordStrengthBar');
+            const val = password.value;
+            if (val.length === 0) {
+                bar.className = 'password-strength-bar';
+                return;
+            }
+            let strength = 0;
+            if (val.length >= 8) strength++;
+            if (val.length >= 12) strength++;
+            if (/[A-Z]/.test(val)) strength++;
+            if (/[0-9]/.test(val)) strength++;
+            if (/[^A-Za-z0-9]/.test(val)) strength++;
+
+            bar.className = 'password-strength-bar';
+            if (strength <= 2) bar.classList.add('weak');
+            else if (strength <= 3) bar.classList.add('medium');
+            else bar.classList.add('strong');
+        }
+
+        fields.forEach(f => {
+            f.addEventListener('input', () => {
+                validateField(f);
+                if (f === password) {
+                    updatePasswordStrength();
+                    if (confirmPassword.value) validateField(confirmPassword);
+                }
+                if (f === confirmPassword || f === password) {
+                    if (confirmPassword.value) validateField(confirmPassword);
+                }
+            });
+        });
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            let allValid = true;
+            fields.forEach(f => {
+                if (!validateField(f)) allValid = false;
+            });
+            if (allValid) {
+                successMessage.classList.add('visible');
+                form.reset();
+                fields.forEach(f => f.classList.remove('success', 'error'));
+                document.getElementById('passwordStrengthBar').className = 'password-strength-bar';
+            }
+        });
+    </script>
+</body>
+</html>
